@@ -1,0 +1,24 @@
+# Lokale Programmdateien nicht versehentlich veröffentlichen.
+seraph-copy/reference/
+seraph-copy/working/
+/seraph-copy/
+.deps/
+build/
+dist/
+/releases/
+/local/
+*.log
+/publish/
+settings.properties
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+/.idea/
+/.vscode/
+Thumbs.db
+.DS_Store

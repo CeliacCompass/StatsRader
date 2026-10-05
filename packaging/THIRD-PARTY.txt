@@ -1,0 +1,23 @@
+Bedwars Tab includes these unmodified open-source runtime components:
+
+Eclipse Temurin / OpenJDK 17.0.20.1+1, Windows x86_64
+Copyright the respective OpenJDK contributors; GPL version 2 with Classpath Exception.
+Component licenses and notices are retained in runtime/legal/ and licenses/java/.
+The corresponding OpenJDK source and Temurin build-script archives are included
+under sources/ at the exact revisions below. The JDK release metadata is retained.
+Source revision (from the supplied JDK release metadata):
+https://github.com/adoptium/jdk17u/tree/79597447bd94
+Build scripts revision:
+https://github.com/adoptium/temurin-build/tree/e6ba7dec3d07654074559310376a3ae89da5f4ac
+
+Gson 2.13.1 — Apache License 2.0
+https://github.com/google/gson/tree/gson-parent-2.13.1
+See licenses/gson/.
+
+ASM 9.8 — BSD 3-Clause
+https://asm.ow2.io/
+See licenses/asm/.
+
+Badlion, Minecraft, OptiFine, Guava and Mojang Authlib binaries are not distributed
+in this package. The small game integration classes are compiled against the
+recipient's existing client interfaces and use the recipient's installed game.
