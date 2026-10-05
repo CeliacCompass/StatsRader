@@ -14,7 +14,7 @@ public final class AttachDiagnostics {
                     + "Mit dem Startparameter -XX:+DisableAttachMechanism ist dieser Ladeweg deaktiviert. "
                     + "Erneutes Injizieren oder andere API-Keys beheben diese Startkonfiguration nicht.\n"
                     + "Keys mit Keys speichern sichern, Minecraft und Badlion vollständig beenden, "
-                    + "dann Start-Badlion-Mit-BedwarsTab-App.cmd öffnen und Minecraft 1.8.9 starten. "
+                    + "dann in StatsRader ‚Badlion starten‘ anklicken und Minecraft 1.8.9 starten. "
                     + "Der Startmodus lädt die App-Verbindung; danach können Inject und Deaktivieren ohne Java-Attach verwendet werden.";
             }
         }

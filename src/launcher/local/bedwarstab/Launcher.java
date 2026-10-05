@@ -96,7 +96,7 @@ public final class Launcher {
                 if (ProcessHandle.of(Long.parseLong(args[1])).flatMap(p -> p.info().arguments())
                     .map(a -> Arrays.asList(a).contains("-XX:+DisableAttachMechanism")).orElse(false)) {
                     System.err.println("Dieses Spiel wurde ohne die neue App-Verbindung gestartet und sperrt Java-Attach. " +
-                        "Einmal Minecraft und Badlion vollständig schließen und über ‚Badlion starten‘ oder Start-Badlion-Mit-BedwarsTab-App.cmd starten. " +
+                        "Einmal Minecraft und Badlion vollständig schließen und in StatsRader über ‚Badlion starten‘ starten. " +
                         "Danach funktionieren Inject, Deaktivieren und Key-Wechsel während des Spiels.");
                     return 1;
                 }

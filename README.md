@@ -10,6 +10,8 @@
 Die portable **StatsRader-Portable.exe** findest du unter [Releases](https://github.com/CeliacCompass/StatsRader/releases).
 Nur eine Datei – Java ist enthalten. Windows 10/11 mit 64 Bit, Badlion und Minecraft **1.8.9** werden benötigt.
 
+Zum Benutzen brauchst du nur die EXE aus Releases. Die Ordner hier enthalten Quellcode, Tests, Grafiken und Build-Werkzeuge für die Entwicklung. `Start-StatsRader.cmd` ist der lokale Starter nach einem eigenen Build.
+
 ![StatsRader Desktop-App](previews/statsrader-1040.png)
 
 ## Funktionen

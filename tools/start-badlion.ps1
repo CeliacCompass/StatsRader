@@ -23,7 +23,7 @@ $existing = $start.EnvironmentVariables['JAVA_TOOL_OPTIONS']
 $start.EnvironmentVariables['JAVA_TOOL_OPTIONS'] = ($existing + ' ' + $option).Trim()
 $process = [System.Diagnostics.Process]::Start($start)
 Write-Output 'Badlion-Start aufgerufen. Jetzt Minecraft 1.8.9 im geoeffneten Launcher starten.'
-if ($App) { Write-Output 'Nach dem Spielstart Start-BedwarsTab-App.cmd oeffnen und Inject klicken.' }
+if ($App) { Write-Output 'Nach dem Spielstart Start-StatsRader.cmd oeffnen und Inject klicken.' }
 else { Write-Output 'Die Erweiterung versucht sich automatisch zu laden; kein Klick auf Injizieren erforderlich.' }
 Write-Output 'Diagnose: %LOCALAPPDATA%\BedwarsTab\startup-<Spiel-PID>.log und agent.log.'
 Write-Output 'Falls kein neues startup-Protokoll entsteht, hat Badlion die Java-Startoption nicht uebernommen.'

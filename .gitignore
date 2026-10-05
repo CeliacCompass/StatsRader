@@ -22,3 +22,9 @@ settings.properties
 /.vscode/
 Thumbs.db
 .DS_Store
+# Frühere Starter und Layout-Vorschau bleiben ausschließlich lokal erhalten.
+/Start-BedwarsTab.cmd
+/Start-BedwarsTab-App.cmd
+/Start-Badlion-Mit-BedwarsTab.cmd
+/Start-Badlion-Mit-BedwarsTab-App.cmd
+/previews/tab-layout.png
