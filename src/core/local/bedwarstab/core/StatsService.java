@@ -17,11 +17,13 @@ public final class StatsService implements AutoCloseable {
     private static final long[] FINAL_DEATH_COLORS = {500, 1000, 2500, 5000, 7500, 15000, 25000, 50000, 100000};
     private static final long[] BED_COLORS = {250, 500, 1250, 2500, 3750, 7500, 12500, 25000, 50000};
     private static final String[] TIER_COLORS = {"§f", "§a", "§2", "§e", "§6", "§c", "§4", "§d", "§5"};
-    private String hypixelKey, urchinKey;
-    private String mode;
+    private volatile String hypixelKey, urchinKey;
+    private volatile String mode;
     private final Path settingsRoot;
     private volatile DisplaySettings display;
     private final ScheduledExecutorService worker;
+    private final ThreadPoolExecutor requests;
+    private final boolean scheduled;
     private final LinkedHashMap<UUID, Entry> cache = new LinkedHashMap<>(64, .75f, true);
     private final LinkedBlockingQueue<UUID> queue = new LinkedBlockingQueue<>(512);
     private final Gate hypixel = new Gate(), urchin = new Gate();
@@ -31,12 +33,13 @@ public final class StatsService implements AutoCloseable {
     private final Set<HttpURLConnection> connections = ConcurrentHashMap.newKeySet();
     @FunctionalInterface interface Transport { Reply fetch(String address, String header, String key); }
 
-    static final class Gate { long until; boolean invalidKey; }
+    static final class Gate { volatile long until; long nextRequestAt; volatile boolean invalidKey; }
     static final class Entry {
         volatile String bw = "§8BW:…", blacklist = " §8U:…";
         ParsedStats stats;
         volatile long statsDue, blacklistDue, seen = System.currentTimeMillis();
         boolean queued;
+        int pendingRequests;
     }
     public StatsService(Path root) throws IOException {
         this(root, null, System::currentTimeMillis, true);
@@ -44,6 +47,7 @@ public final class StatsService implements AutoCloseable {
     StatsService(Path root, Transport transport, LongSupplier clock, boolean schedule) throws IOException {
         this.settingsRoot = root;
         this.clock = clock;
+        this.scheduled = schedule;
         this.transport = transport == null ? this::fetch : transport;
         Properties p = DisplaySettings.read(root);
         hypixelKey = p.getProperty("hypixelKey", "").trim();
@@ -53,7 +57,9 @@ public final class StatsService implements AutoCloseable {
         worker = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "BedwarsTab-API"); thread.setDaemon(true); return thread;
         });
-        if (schedule) worker.scheduleWithFixedDelay(this::pump, 100, 1000, TimeUnit.MILLISECONDS);
+        requests = new ThreadPoolExecutor(4, 4, 0, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(4), r -> { Thread thread = new Thread(r, "BedwarsTab-Request"); thread.setDaemon(true); return thread; });
+        if (schedule) worker.scheduleWithFixedDelay(this::dispatch, 100, 100, TimeUnit.MILLISECONDS);
     }
     static String validMode(String value) {
         return Set.of("overall", "eight_one", "eight_two", "four_three", "four_four", "two_four").contains(value) ? value : "overall";
@@ -110,45 +116,110 @@ public final class StatsService implements AutoCloseable {
         Entry entry;
         synchronized (cache) { entry = cache.get(uuid); }
         if (entry == null) return;
-        try {
+        processPlayer(uuid, entry);
+        synchronized (cache) { entry.queued = false; }
+    }
+    private void dispatch() {
+        if (closed || requests.getActiveCount() + requests.getQueue().size() >= 3) return;
+        reloadCredentials();
+        UUID uuid = queue.poll();
+        if (uuid == null) return;
+        Entry entry;
+        int count = 0;
+        boolean stats, tags;
+        synchronized (cache) {
+            entry = cache.get(uuid);
+            if (entry == null) return;
             long now = clock.getAsLong();
-            if (now - entry.seen > 15000) return; // Do not spend requests on a lobby already left.
-            if (display.anyStats() && now >= entry.statsDue) {
-                if (hypixelKey.isEmpty()) { statsStatus(entry, "§8BW:KEY"); entry.statsDue = Long.MAX_VALUE; }
-                else if (hypixel.invalidKey) { statsStatus(entry, "§cBW:AUTH"); entry.statsDue = Long.MAX_VALUE; }
-                else if (now < hypixel.until) { statsStatus(entry, "§eBW:LIMIT"); entry.statsDue = hypixel.until; }
-                else {
-                    Reply r = transport.fetch("https://api.hypixel.net/v2/player?uuid=" + uuid.toString().replace("-", ""), "API-Key", hypixelKey);
-                    if (closed) return;
-                    updateGate(hypixel, r, clock.getAsLong());
+            if (now - entry.seen <= 15000) {
+                if (display.anyStats() && now >= entry.statsDue) count++;
+                if (display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue) count++;
+            }
+            if (count == 0) { entry.queued = false; return; }
+            entry.pendingRequests = count;
+            stats = display.anyStats() && now >= entry.statsDue;
+            tags = display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue;
+        }
+        if (stats) submitRequest(uuid, entry, true);
+        if (tags) submitRequest(uuid, entry, false);
+    }
+    private void submitRequest(UUID uuid, Entry entry, boolean stats) {
+        try {
+            requests.execute(() -> {
+                try {
+                    if (stats) fetchStats(uuid, entry);
+                    else fetchUrchin(uuid, entry);
+                } finally {
                     synchronized (cache) {
-                        entry.stats = r.code == 200 ? parseValues(r.body, mode) : null;
-                        entry.bw = entry.stats != null ? entry.stats.format(display) : "§eBW:" + label(r.code);
+                        if (--entry.pendingRequests <= 0) entry.queued = false;
                     }
-                    entry.statsDue = nextDue(r, entry.stats != null && entry.stats.status == null, hypixel, clock.getAsLong());
                 }
+            });
+        } catch (RejectedExecutionException rejected) {
+            synchronized (cache) { entry.pendingRequests = 0; entry.queued = false; }
+        }
+    }
+    private void processPlayer(UUID uuid, Entry entry) {
+        if (closed || clock.getAsLong() - entry.seen > 15000) return;
+        if (display.anyStats() && clock.getAsLong() >= entry.statsDue) fetchStats(uuid, entry);
+        if (!closed && display.enabled(Category.BLACKLIST) && clock.getAsLong() >= entry.blacklistDue) fetchUrchin(uuid, entry);
+    }
+    private void fetchStats(UUID uuid, Entry entry) {
+        long now = clock.getAsLong();
+        if (closed || now - entry.seen > 15000 || !display.anyStats() || now < entry.statsDue) return;
+        String key = hypixelKey, selectedMode = mode;
+        if (key.isEmpty()) { statsStatus(entry, "§8BW:KEY"); entry.statsDue = Long.MAX_VALUE; return; }
+        if (hypixel.invalidKey) { statsStatus(entry, "§cBW:AUTH"); entry.statsDue = Long.MAX_VALUE; return; }
+        if (now < hypixel.until) { statsStatus(entry, "§eBW:LIMIT"); entry.statsDue = hypixel.until; return; }
+        try {
+            if (!awaitPermit(hypixel, 500)) return;
+            Reply r = transport.fetch("https://api.hypixel.net/v2/player?uuid=" + uuid.toString().replace("-", ""), "API-Key", key);
+            if (closed) return;
+            long completed = clock.getAsLong(); updateGate(hypixel, r, completed);
+            if (!key.equals(hypixelKey)) return;
+            synchronized (cache) {
+                entry.stats = r.code == 200 ? parseValues(r.body, selectedMode) : null;
+                entry.bw = entry.stats != null ? entry.stats.format(display) : "§eBW:" + label(r.code);
             }
-            now = clock.getAsLong();
-            if (!closed && display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue) {
-                if (urchinKey.isEmpty()) { entry.blacklist = " §8U:KEY"; entry.blacklistDue = Long.MAX_VALUE; }
-                else if (urchin.invalidKey) { entry.blacklist = " §cU:AUTH"; entry.blacklistDue = Long.MAX_VALUE; }
-                else if (now < urchin.until) { entry.blacklist = " §eU:LIMIT"; entry.blacklistDue = urchin.until; }
-                else {
-                    String address = "https://urchin.ws/player/" + uuid + "?key=" + URLEncoder.encode(urchinKey, StandardCharsets.UTF_8) + "&sources=GAME";
-                    Reply r = transport.fetch(address, "", "");
-                    if (closed) return;
-                    updateGate(urchin, r, clock.getAsLong());
-                    entry.blacklist = r.code == 200 ? parseUrchinTags(r.body) : r.code == 404 ? " §8U:–" : " §eU:" + label(r.code);
-                    long cacheMillis = r.code == 200 || r.code == 404 ? 300000 : 60000;
-                    entry.blacklistDue = urchin.invalidKey ? Long.MAX_VALUE : Math.max(clock.getAsLong() + cacheMillis, urchin.until);
-                }
-            }
+            entry.statsDue = nextDue(r, entry.stats != null && entry.stats.status == null, hypixel, completed);
         } catch (Exception e) {
-            synchronized (cache) { entry.stats = null; }
-            entry.bw = "§eBW:?"; entry.blacklist = " §eU:?";
-            entry.statsDue = entry.blacklistDue = clock.getAsLong() + 60000;
-            Agent.log("API worker: " + e.getClass().getSimpleName());
-        } finally { synchronized (cache) { entry.queued = false; } }
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            if (!closed) { statsStatus(entry, "§eBW:?"); entry.statsDue = clock.getAsLong() + 60000; Agent.log("Hypixel worker: " + e.getClass().getSimpleName()); }
+        }
+    }
+    private void fetchUrchin(UUID uuid, Entry entry) {
+        long now = clock.getAsLong();
+        if (closed || now - entry.seen > 15000 || !display.enabled(Category.BLACKLIST) || now < entry.blacklistDue) return;
+        String key = urchinKey;
+        if (key.isEmpty()) { entry.blacklist = " §8U:KEY"; entry.blacklistDue = Long.MAX_VALUE; return; }
+        if (urchin.invalidKey) { entry.blacklist = " §cU:AUTH"; entry.blacklistDue = Long.MAX_VALUE; return; }
+        if (now < urchin.until) { entry.blacklist = " §eU:LIMIT"; entry.blacklistDue = urchin.until; return; }
+        try {
+            if (!awaitPermit(urchin, 1000)) return;
+            String address = "https://urchin.ws/player/" + uuid + "?key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) + "&sources=GAME";
+            Reply r = transport.fetch(address, "", "");
+            if (closed) return;
+            long completed = clock.getAsLong(); updateGate(urchin, r, completed);
+            if (!key.equals(urchinKey)) return;
+            entry.blacklist = r.code == 200 ? parseUrchinTags(r.body) : r.code == 404 ? " §8U:–" : " §eU:" + label(r.code);
+            long cacheMillis = r.code == 200 || r.code == 404 ? 300000 : 60000;
+            entry.blacklistDue = urchin.invalidKey ? Long.MAX_VALUE : Math.max(completed + cacheMillis, urchin.until);
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            if (!closed) { entry.blacklist = " §eU:?"; entry.blacklistDue = clock.getAsLong() + 60000; Agent.log("Urchin worker: " + e.getClass().getSimpleName()); }
+        }
+    }
+    private boolean awaitPermit(Gate gate, long intervalMillis) throws InterruptedException {
+        if (!scheduled) return true;
+        synchronized (gate) {
+            while (!closed && !gate.invalidKey) {
+                long now = clock.getAsLong();
+                long ready = Math.max(gate.until, gate.nextRequestAt);
+                if (now >= ready) { gate.nextRequestAt = now + intervalMillis; return true; }
+                gate.wait(Math.max(1, ready - now));
+            }
+        }
+        return false;
     }
     /** Runs only on the API worker, so old requests finish before credentials and gates change. */
     private void reloadCredentials() {
@@ -163,8 +234,8 @@ public final class StatsService implements AutoCloseable {
             synchronized (cache) {
                 hypixelKey = newHypixel; urchinKey = newUrchin; mode = newMode;
                 // A display/mode change must not defeat a provider's rate limit or invalid-key gate.
-                if (hypixelChanged) { hypixel.invalidKey = false; hypixel.until = 0; }
-                if (urchinChanged) { urchin.invalidKey = false; urchin.until = 0; }
+                if (hypixelChanged) synchronized (hypixel) { hypixel.invalidKey = false; hypixel.until = 0; hypixel.notifyAll(); }
+                if (urchinChanged) synchronized (urchin) { urchin.invalidKey = false; urchin.until = 0; urchin.notifyAll(); }
                 for (Entry entry : cache.values()) {
                     if (hypixelChanged || modeChanged) { entry.stats = null; entry.bw = "§8BW:…"; entry.statsDue = 0; }
                     if (urchinChanged) { entry.blacklist = " §8U:…"; entry.blacklistDue = 0; }
@@ -186,16 +257,19 @@ public final class StatsService implements AutoCloseable {
         updateGate(gate, r, System.currentTimeMillis());
     }
     static void updateGate(Gate gate, Reply r, long now) {
-        if (r.code == 401 || r.code == 403) gate.invalidKey = true;
-        if (r.code == 429 || "0".equals(r.remaining)) {
-            long seconds = 60;
-            String delay = r.retryAfter.isEmpty() ? r.reset : r.retryAfter;
-            try { seconds = Math.max(1, Long.parseLong(delay)); }
-            catch (NumberFormatException ignored) {
-                try { seconds = Math.max(1, (java.time.ZonedDateTime.parse(delay, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - now + 999) / 1000); }
-                catch (java.time.DateTimeException alsoIgnored) { }
+        synchronized (gate) {
+            if (r.code == 401 || r.code == 403) gate.invalidKey = true;
+            if (r.code == 429 || "0".equals(r.remaining)) {
+                long seconds = 60;
+                String delay = r.retryAfter.isEmpty() ? r.reset : r.retryAfter;
+                try { seconds = Math.max(1, Long.parseLong(delay)); }
+                catch (NumberFormatException ignored) {
+                    try { seconds = Math.max(1, (java.time.ZonedDateTime.parse(delay, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - now + 999) / 1000); }
+                    catch (java.time.DateTimeException alsoIgnored) { }
+                }
+                gate.until = now + Math.min(seconds, 86400) * 1000;
             }
-            gate.until = now + Math.min(seconds, 86400) * 1000;
+            gate.notifyAll();
         }
     }
     private static long nextDue(Reply r, boolean valid, Gate gate, long now) {
@@ -410,7 +484,9 @@ public final class StatsService implements AutoCloseable {
         return level + xp / 5000;
     }
     public void close() {
-        closed = true; worker.shutdownNow(); queue.clear();
+        closed = true; worker.shutdownNow(); requests.shutdownNow(); queue.clear();
+        synchronized (hypixel) { hypixel.notifyAll(); }
+        synchronized (urchin) { urchin.notifyAll(); }
         synchronized (connections) { for (HttpURLConnection connection : connections) connection.disconnect(); connections.clear(); }
         synchronized (cache) { cache.clear(); }
     }

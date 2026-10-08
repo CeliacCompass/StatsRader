@@ -2,6 +2,8 @@ package local.bedwarstab.core;
 
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.*;
 import local.bedwarstab.config.DisplaySettings;
 import local.bedwarstab.config.DisplaySettings.Category;
@@ -69,7 +71,28 @@ public class WorkerTest {
         StatsService.updateGate(gate, new StatsService.Reply(429, "", "", "", date), clock.get());
         check(gate.until == clock.get() + 120000, "Retry-After HTTP-date supported");
         liveCredentials(root, clock);
+        independentProviders(root.getParent());
         System.out.println("PASS: " + checks + " worker lifecycle, cache and provider recovery checks (fake transport; no network)");
+    }
+    static void independentProviders(Path base) throws Exception {
+        Path root = Files.createTempDirectory(base, "parallel-");
+        Properties credentials = new Properties(); credentials.setProperty("hypixelKey", "test-only"); credentials.setProperty("urchinKey", "test-only");
+        DisplaySettings.write(root, credentials);
+        CountDownLatch hypixelEntered = new CountDownLatch(1), urchinEntered = new CountDownLatch(1), release = new CountDownLatch(1);
+        StatsService service = new StatsService(root, (url, header, key) -> {
+            if (header.equals("API-Key")) hypixelEntered.countDown(); else urchinEntered.countDown();
+            try { if (!release.await(3, TimeUnit.SECONDS)) throw new AssertionError("request test timed out"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); return reply(0, ""); }
+            return header.equals("API-Key") ? reply(200, PLAYER) : reply(200, CLEAR);
+        }, System::currentTimeMillis, true);
+        try {
+            service.suffix(FIRST);
+            check(hypixelEntered.await(3, TimeUnit.SECONDS) && urchinEntered.await(3, TimeUnit.SECONDS), "Hypixel and Urchin requests start independently");
+        } finally { release.countDown(); }
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline && !(service.suffix(FIRST).contains("4.00 FKDR") && service.suffix(FIRST).contains("U:–"))) Thread.sleep(10);
+        check(service.suffix(FIRST).contains("4.00 FKDR") && service.suffix(FIRST).contains("U:–"), "parallel provider responses reach the tab cache");
+        service.close();
     }
     static void liveCredentials(Path root, AtomicLong clock) throws Exception {
         DisplaySettings.update(root, p -> { p.setProperty("hypixelKey", "old-test-key"); p.setProperty("urchinKey", ""); });
