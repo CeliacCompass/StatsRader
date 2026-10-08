@@ -26,6 +26,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Portable startup tests failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Worker tests failed' }
 & $java -cp "$(Join-Path $testRoot 'classes');$cp" local.bedwarstab.core.AutoWhoTest
 if ($LASTEXITCODE -ne 0) { throw 'Auto /who state tests failed' }
+& $java -cp "$(Join-Path $testRoot 'classes');$cp" local.bedwarstab.core.AutoWhoAlertTest $testRoot
+if ($LASTEXITCODE -ne 0) { throw 'In-game alert tests failed' }
 & $java -cp "$(Join-Path $testRoot 'classes');$cp" local.bedwarstab.SettingsConcurrencyTest $testRoot
 if ($LASTEXITCODE -ne 0) { throw 'Settings concurrency tests failed' }
 @('Manifest-Version: 1.0','Premain-Class: TestAgent','Can-Retransform-Classes: true','') | Set-Content -LiteralPath (Join-Path $testRoot 'test.mf') -Encoding ascii

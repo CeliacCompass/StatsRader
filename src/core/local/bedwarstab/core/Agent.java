@@ -50,7 +50,7 @@ public final class Agent {
             }
             if (gameLoader == null) throw new IllegalStateException("Keine Minecraft-Tab-Klasse gefunden");
             gameConfig = new GameConfig(gameLoader, Path.of(directory), root, service);
-            autoWho = new AutoWho(gameLoader, hosts);
+            autoWho = new AutoWho(gameLoader, hosts, service);
             transformer = new TabTransformer();
             chatTransformer = new ChatTransformer();
             tickTransformer = new TickTransformer();

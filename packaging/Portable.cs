@@ -13,7 +13,7 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("StatsRader")]
 [assembly: AssemblyProduct("StatsRader")]
 [assembly: AssemblyDescription("Bedwars Companion for Badlion 1.8.9")]
-[assembly: AssemblyVersion("0.3.0.0")]
+[assembly: AssemblyVersion("0.3.1.0")]
 
 // One file for recipients. Application data stays outside this versioned, verified runtime cache.
 internal static class Portable

@@ -58,7 +58,7 @@ foreach ($source in @('temurin-jdk17u-79597447bd94.tar.gz','temurin-build-e6ba7d
 }
 
 $releaseId = Split-Path $releaseRoot -Leaf
-@("Product=StatsRader", "Version=0.3.0-beta.1", "Build=$releaseId", "Platform=Windows x86_64") | Set-Content -LiteralPath (Join-Path $payload 'VERSION.txt') -Encoding utf8
+@("Product=StatsRader", "Version=0.3.1-beta.1", "Build=$releaseId", "Platform=Windows x86_64") | Set-Content -LiteralPath (Join-Path $payload 'VERSION.txt') -Encoding utf8
 $manifest = Join-Path $packageRoot 'payload.manifest'
 $files = @(Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName)
 $manifestLines = foreach ($file in $files) {
@@ -73,7 +73,7 @@ $digestFile = Join-Path $packageRoot 'payload.sha256'
 (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $digestFile -Encoding ascii
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (!(Test-Path -LiteralPath $compiler)) { throw '.NET Framework C# compiler missing' }
-$output = Join-Path $publishRoot ('StatsRader-0.3.0-beta.1-' + $releaseId + '-win-x64.exe')
+$output = Join-Path $publishRoot ('StatsRader-0.3.1-beta.1-' + $releaseId + '-win-x64.exe')
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ "/win32icon:$(Join-Path $projectRoot 'assets\statsrader.ico')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll "/win32manifest:$(Join-Path $projectRoot 'packaging\portable.manifest')" "/resource:$zip,payload.zip" "/resource:$manifest,payload.manifest" "/resource:$digestFile,payload.sha256" "/out:$output" (Join-Path $projectRoot 'packaging\Portable.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Portable EXE compilation failed' }
 

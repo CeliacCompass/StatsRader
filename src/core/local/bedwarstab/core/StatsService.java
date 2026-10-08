@@ -40,6 +40,7 @@ public final class StatsService implements AutoCloseable {
         ParsedStats stats;
         volatile long statsDue, blacklistDue, seen = System.currentTimeMillis();
         boolean queued;
+        boolean alertWanted;
         int pendingRequests;
     }
     public StatsService(Path root) throws IOException {
@@ -80,6 +81,37 @@ public final class StatsService implements AutoCloseable {
             return " §8│ " + (selected.anyStats() ? entry.bw : "") +
                 (selected.enabled(Category.BLACKLIST) ? entry.blacklist : "") + "§r";
         }
+    }
+    /** Request Bedwars counters for an in-game alert, even when their tab columns are hidden. */
+    void requestAlertStats(UUID uuid) {
+        if (uuid == null || uuid.version() != 4) return;
+        synchronized (cache) {
+            if (closed) return;
+            Entry entry = cache.get(uuid);
+            if (entry == null) {
+                if (cache.size() >= 512) { Iterator<UUID> iterator = cache.keySet().iterator(); iterator.next(); iterator.remove(); }
+                entry = new Entry(); cache.put(uuid, entry);
+            }
+            entry.seen = clock.getAsLong();
+            entry.alertWanted = true;
+            if (entry.stats == null && !entry.queued && entry.statsDue != Long.MAX_VALUE)
+                entry.queued = queue.offer(uuid);
+        }
+    }
+    AlertStats alertStats(UUID uuid) {
+        synchronized (cache) {
+            Entry entry = cache.get(uuid);
+            if (entry == null || entry.stats == null || entry.stats.status != null) return null;
+            ParsedStats stats = entry.stats;
+            return new AlertStats(stats.stars, stats.finalKills, stats.finalDeaths);
+        }
+    }
+    record AlertStats(long stars, long finalKills, long finalDeaths) {
+        boolean qualifies() {
+            return stars > 400 || java.math.BigInteger.valueOf(finalKills)
+                .compareTo(java.math.BigInteger.valueOf(finalDeaths).multiply(java.math.BigInteger.valueOf(5))) > 0;
+        }
+        String fkdr() { return ratio(finalKills, finalDeaths); }
     }
     DisplaySettings displaySettings() { return display; }
     /** Cells carry values only; category labels are rendered once in the table header. */
@@ -135,12 +167,12 @@ public final class StatsService implements AutoCloseable {
             if (entry == null) return;
             now = clock.getAsLong();
             if (now - entry.seen <= 15000) {
-                if (display.anyStats() && now >= entry.statsDue) count++;
+                if ((display.anyStats() || entry.alertWanted) && now >= entry.statsDue) count++;
                 if (display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue) count++;
             }
             if (count == 0) { entry.queued = false; return; }
             entry.pendingRequests = count;
-            stats = display.anyStats() && now >= entry.statsDue;
+            stats = (display.anyStats() || entry.alertWanted) && now >= entry.statsDue;
             tags = display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue;
         }
         if (stats) submitRequest(uuid, entry, true);
@@ -164,12 +196,12 @@ public final class StatsService implements AutoCloseable {
     }
     private void processPlayer(UUID uuid, Entry entry) {
         if (closed || clock.getAsLong() - entry.seen > 15000) return;
-        if (display.anyStats() && clock.getAsLong() >= entry.statsDue) fetchStats(uuid, entry);
+        if ((display.anyStats() || entry.alertWanted) && clock.getAsLong() >= entry.statsDue) fetchStats(uuid, entry);
         if (!closed && display.enabled(Category.BLACKLIST) && clock.getAsLong() >= entry.blacklistDue) fetchUrchin(uuid, entry);
     }
     private void fetchStats(UUID uuid, Entry entry) {
         long now = clock.getAsLong();
-        if (closed || now - entry.seen > 15000 || !display.anyStats() || now < entry.statsDue) return;
+        if (closed || now - entry.seen > 15000 || (!display.anyStats() && !entry.alertWanted) || now < entry.statsDue) return;
         String key = hypixelKey, selectedMode = mode;
         if (key.isEmpty()) { statsStatus(entry, "§8BW:KEY"); entry.statsDue = Long.MAX_VALUE; return; }
         if (hypixel.invalidKey) { statsStatus(entry, "§cBW:AUTH"); entry.statsDue = Long.MAX_VALUE; return; }
@@ -323,7 +355,7 @@ public final class StatsService implements AutoCloseable {
         return parseValues(json, mode).format(settings);
     }
     /** Store only formatted counters, not complete Hypixel profiles, in the cache. */
-    private record ParsedStats(Map<Category, String> fields, String status) {
+    private record ParsedStats(Map<Category, String> fields, String status, long stars, long finalKills, long finalDeaths) {
         String format(DisplaySettings settings) {
             if (!settings.anyStats()) return "";
             if (status != null) return status;
@@ -332,7 +364,7 @@ public final class StatsService implements AutoCloseable {
             return String.join(" ", visible);
         }
     }
-    private static ParsedStats unavailable(String message) { return new ParsedStats(Map.of(), message); }
+    private static ParsedStats unavailable(String message) { return new ParsedStats(Map.of(), message, 0, 0, 0); }
     private static ParsedStats parseValues(String json, String mode) {
         try {
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
@@ -363,7 +395,7 @@ public final class StatsService implements AutoCloseable {
             fields.put(Category.BEDS_LOST, countColor(Category.BEDS_LOST, bedsLost) + compact(bedsLost) + " BLost");
             fields.put(Category.KDR, kdrColor(normalKills, normalDeaths) + ratio(normalKills, normalDeaths) + " KDR");
             fields.put(Category.BBLR, bblrColor(bedsBroken, bedsLost) + ratio(bedsBroken, bedsLost) + " BBLR");
-            return new ParsedStats(Map.copyOf(fields), null);
+            return new ParsedStats(Map.copyOf(fields), null, stars, kills, deaths);
         } catch (RuntimeException e) { return unavailable("§eBW:?"); }
     }
     /** Display only the category, never the free-form reason or reporting player's name. */
