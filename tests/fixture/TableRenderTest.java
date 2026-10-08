@@ -8,7 +8,7 @@ public class TableRenderTest {
         BedwarsTabPlayerTabOverlay tab = new BedwarsTabPlayerTabOverlay(mc, mc.q);
         Bridge.tableHandler = players -> {
             String[][] rows = new String[players.length + 1][];
-            rows[0] = new String[]{"Tag", "Name", "FKDR", "BBLR", "WLR", "Wins", "Seraph"};
+            rows[0] = new String[]{"Tag", "Name", "FKDR", "BBLR", "WLR", "Wins", "Urchin"};
             for (int i = 0; i < players.length; i++) rows[i + 1] = new String[]{
                 i == 2 ? "§8NICK/NPC" : "§e" + (42 + i * 53) + "★", "", "§b" + (i + 1) + ".25", "§d1.40", "§a2.80", "§a" + (20 + i * 112), i == 4 ? "§cCHEAT" : "§8–"};
             if (players.length > 2) for (int c = 2; c < rows[3].length; c++) rows[3][c] = "§8—";
@@ -28,10 +28,10 @@ public class TableRenderTest {
             List<avp.Text> headers = avp.texts.stream().filter(t -> t.value().equals("FKDR")).toList();
             for (avp.Text value : avp.texts) if (value.value().startsWith("§b") && value.value().endsWith(".25"))
                 if (headers.stream().noneMatch(h -> h.x() + h.width() == value.x() + value.width())) throw new AssertionError("unaligned numeric column");
-            int seraph = avp.texts.stream().filter(t -> t.value().equals("Seraph")).findFirst().orElseThrow().x();
+            int urchin = avp.texts.stream().filter(t -> t.value().equals("Urchin")).findFirst().orElseThrow().x();
             int ping = avp.texts.stream().filter(t -> t.value().equals("Ping")).findFirst().orElseThrow().x();
             int hp = avp.texts.stream().filter(t -> t.value().equals("HP")).findFirst().orElseThrow().x();
-            if (seraph <= ping || hp <= seraph) throw new AssertionError("expected Ping, Seraph, HP at right edge");
+            if (urchin <= ping || hp <= urchin) throw new AssertionError("expected Ping, Urchin, HP at right edge");
             if (size[0] == 854 && count == 8) javax.imageio.ImageIO.write(avp.canvas, "png", Path.of(args[0], "tab-layout-preview.png").toFile());
         }
         mc.network.players.subList(8, mc.network.players.size()).clear(); mc.screenHeight = 480;

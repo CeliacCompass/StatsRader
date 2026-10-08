@@ -92,11 +92,12 @@ public final class CoreTest {
         check(StatsService.kdrColor(Long.MAX_VALUE / 2, (Long.MAX_VALUE / 2) * 2).equals("§f"), "KDR exactly 0.5 with large counts");
         check(StatsService.parseBedwars("{\"success\":true,\"player\":{\"stats\":{\"Bedwars\":{\"eight_two_kills_bedwars\":7,\"eight_two_deaths_bedwars\":1,\"final_kills_bedwars\":100}}}}", "eight_two", new DisplaySettings(Set.of(Category.KDR))).equals("§d7.00 KDR"), "KDR uses normal kills/deaths in selected mode");
         check(StatsService.level(487000) == 100 && StatsService.level(487500) == 101 && StatsService.level(6999) == 3, "prestige experience thresholds");
-        check(StatsService.parseBlacklist("{\"success\":true,\"data\":{\"blacklist\":{\"tagged\":true,\"report_type\":\"cheating_closet\"}}}").contains("BL:CHEAT"), "cheater tag");
-        check(StatsService.parseBlacklist("{\"success\":true,\"data\":{\"blacklist\":{\"tagged\":true,\"report_type\":\"caution\"}}}").contains("BL:CAUTION"), "caution is not cheating");
-        check(StatsService.parseBlacklist("{\"success\":true,\"data\":{\"blacklist\":{\"tagged\":false}}}").contains("BL:–"), "explicitly unlisted");
-        for (String malformed : new String[]{"{}", "{\"success\":false}", "{\"success\":true,\"data\":null}", "{\"success\":true,\"data\":{\"blacklist\":{\"tagged\":\"false\"}}}", "no"})
-            check(StatsService.parseBlacklist(malformed).contains("BL:?"), "unknown never unlisted: " + malformed);
+        check(StatsService.parseUrchinTags("{\"uuid\":\"x\",\"tags\":[{\"type\":\"cheating_closet\",\"reason\":\"private reason\"}]}").contains("U:CHEAT"), "Urchin cheater tag");
+        check(StatsService.parseUrchinTags("{\"uuid\":\"x\",\"tags\":[{\"type\":\"SNIPER\",\"reason\":\"private reason\"}]}").contains("U:SNIPER"), "Urchin sniper tag");
+        check(!StatsService.parseUrchinTags("{\"tags\":[{\"type\":\"CHEAT\",\"reason\":\"private reason\"}]}").contains("private reason"), "free-form tag reasons are never rendered");
+        check(StatsService.parseUrchinTags("{\"uuid\":\"x\",\"tags\":[]}").contains("U:–"), "explicitly unlisted");
+        for (String malformed : new String[]{"{}", "{\"tags\":null}", "{\"tags\":[{\"reason\":\"no type\"}]}", "no"})
+            check(StatsService.parseUrchinTags(malformed).contains("U:?"), "unknown never unlisted: " + malformed);
         StatsService.Gate gate = new StatsService.Gate();
         StatsService.updateGate(gate, new StatsService.Reply(429, "", "", "", "120"));
         check(gate.until > System.currentTimeMillis() + 119000, "Retry-After honored");

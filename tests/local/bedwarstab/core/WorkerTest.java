@@ -8,21 +8,23 @@ import local.bedwarstab.config.DisplaySettings.Category;
 
 public class WorkerTest {
     static final String PLAYER = "{\"success\":true,\"player\":{\"stats\":{\"Bedwars\":{\"final_kills_bedwars\":12,\"final_deaths_bedwars\":3,\"wins_bedwars\":7}}}}";
-    static final String CLEAR = "{\"success\":true,\"data\":{\"blacklist\":{\"tagged\":false}}}";
+    static final String CLEAR = "{\"uuid\":\"player\",\"tags\":[]}";
     static final UUID FIRST = UUID.fromString("c06f8906-4c8a-4911-9c29-ea1dbd1aab82"), SECOND = UUID.randomUUID();
     static int checks;
     static void check(boolean pass, String message) { checks++; if (!pass) throw new AssertionError(message); }
     static StatsService.Reply reply(int code, String body) { return new StatsService.Reply(code, body, "", "", ""); }
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory(Path.of(args[0]), "worker-");
-        Properties properties = new Properties(); properties.setProperty("hypixelKey", "test-only"); properties.setProperty("seraphKey", "test-only");
+        Properties properties = new Properties(); properties.setProperty("hypixelKey", "test-only"); properties.setProperty("urchinKey", "test-only");
         DisplaySettings.write(root, properties);
         AtomicLong clock = new AtomicLong(1000000);
-        AtomicInteger hypixelCalls = new AtomicInteger(), seraphCalls = new AtomicInteger();
+        AtomicInteger hypixelCalls = new AtomicInteger(), urchinCalls = new AtomicInteger();
         AtomicReference<StatsService.Reply> response = new AtomicReference<>(reply(200, PLAYER));
         StatsService.Transport transport = (url, header, key) -> {
             if (header.equals("API-Key")) { hypixelCalls.incrementAndGet(); return response.get(); }
-            seraphCalls.incrementAndGet(); return reply(200, CLEAR);
+            urchinCalls.incrementAndGet();
+            if (!url.startsWith("https://urchin.ws/player/") || !url.endsWith("&sources=GAME")) throw new AssertionError("Urchin request must use the UUID endpoint and only GAME tags");
+            return reply(200, CLEAR);
         };
         try (StatsService service = new StatsService(root, transport, clock::get, false)) {
             service.suffix(FIRST); service.pump();
@@ -32,23 +34,23 @@ public class WorkerTest {
             check(Arrays.stream(service.tableCells(UUID.fromString("00000000-0000-1000-8000-000000000001"), List.of(Category.FKDR))).allMatch(s -> s.equals("§8—")), "nick identifiers do not fetch fake statistics");
             service.applyDisplaySettings(new DisplaySettings(Set.of(Category.WINS)));
             check(service.suffix(FIRST).contains("7 W") && !service.suffix(FIRST).contains("FKDR"), "reformat cached counters immediately");
-            service.pump(); check(hypixelCalls.get() == 1 && seraphCalls.get() == 1, "toggle does not refetch");
+            service.pump(); check(hypixelCalls.get() == 1 && urchinCalls.get() == 1, "toggle does not refetch");
             service.applyDisplaySettings(new DisplaySettings(Set.of()));
             check(service.suffix(SECOND).isEmpty(), "all hidden leaves no suffix"); service.pump();
-            check(hypixelCalls.get() == 1 && seraphCalls.get() == 1, "hidden providers do not query");
+            check(hypixelCalls.get() == 1 && urchinCalls.get() == 1, "hidden providers do not query");
             service.applyDisplaySettings(DisplaySettings.defaults());
             response.set(reply(403, "")); clock.addAndGet(301000); service.suffix(FIRST); service.pump();
-            check(service.suffix(FIRST).contains("BW:AUTH") && service.suffix(FIRST).contains("BL:–"), "Hypixel auth failure does not suppress blacklist");
+            check(service.suffix(FIRST).contains("BW:AUTH") && service.suffix(FIRST).contains("U:–"), "Hypixel auth failure does not suppress Urchin tags");
             service.applyDisplaySettings(new DisplaySettings(Set.of(Category.FKDR)));
             check(service.suffix(FIRST).contains("BW:AUTH") && !service.suffix(FIRST).contains("4.00"), "toggle cannot resurrect old successful stats");
             service.suffix(SECOND); service.pump(); check(hypixelCalls.get() == 2, "invalid key stops further player queries");
         }
-        hypixelCalls.set(0); seraphCalls.set(0);
+        hypixelCalls.set(0); urchinCalls.set(0);
         response.set(new StatsService.Reply(429, "", "", "", "120"));
         try (StatsService service = new StatsService(root, transport, clock::get, false)) {
             service.suffix(FIRST); service.pump();
             service.suffix(SECOND); service.pump();
-            check(hypixelCalls.get() == 1 && seraphCalls.get() == 2, "429 pauses the affected provider across players");
+            check(hypixelCalls.get() == 1 && urchinCalls.get() == 2, "429 pauses the affected provider across players");
             clock.addAndGet(61000); service.suffix(FIRST); service.pump(); check(hypixelCalls.get() == 1, "no early retry");
             clock.addAndGet(61000); response.set(reply(200, PLAYER)); service.suffix(FIRST); service.pump();
             check(hypixelCalls.get() == 2 && service.suffix(FIRST).contains("4.00"), "rate limit recovers");
@@ -70,7 +72,7 @@ public class WorkerTest {
         System.out.println("PASS: " + checks + " worker lifecycle, cache and provider recovery checks (fake transport; no network)");
     }
     static void liveCredentials(Path root, AtomicLong clock) throws Exception {
-        DisplaySettings.update(root, p -> { p.setProperty("hypixelKey", "old-test-key"); p.setProperty("seraphKey", ""); });
+        DisplaySettings.update(root, p -> { p.setProperty("hypixelKey", "old-test-key"); p.setProperty("urchinKey", ""); });
         AtomicInteger requests = new AtomicInteger(), blacklistRequests = new AtomicInteger();
         AtomicReference<String> lastKey = new AtomicReference<>();
         try (StatsService service = new StatsService(root, (url, header, key) -> {
@@ -81,13 +83,13 @@ public class WorkerTest {
             blacklistRequests.incrementAndGet(); return reply(200, CLEAR);
         }, clock::get, false)) {
             service.suffix(FIRST); service.pump();
-            check(service.suffix(FIRST).contains("AUTH") && service.suffix(FIRST).contains("BL:KEY"), "initial missing/invalid credentials");
+            check(service.suffix(FIRST).contains("AUTH") && service.suffix(FIRST).contains("U:KEY"), "initial missing/invalid credentials");
             DisplaySettings.update(root, p -> p.setProperty("mode", "eight_one")); service.pump();
             service.suffix(FIRST); service.pump();
             check(requests.get() == 1 && service.suffix(FIRST).contains("AUTH"), "mode change cannot bypass rejected key");
-            DisplaySettings.update(root, p -> { p.setProperty("hypixelKey", "replacement-test-key"); p.setProperty("seraphKey", "new-seraph-test-key"); p.setProperty("mode", "overall"); });
+            DisplaySettings.update(root, p -> { p.setProperty("hypixelKey", "replacement-test-key"); p.setProperty("urchinKey", "new-urchin-test-key"); p.setProperty("mode", "overall"); });
             service.pump(); service.suffix(FIRST); service.pump();
-            check(service.suffix(FIRST).contains("4.00 FKDR") && service.suffix(FIRST).contains("BL:–"), "key change recovers both providers without restart");
+            check(service.suffix(FIRST).contains("4.00 FKDR") && service.suffix(FIRST).contains("U:–"), "key change recovers both providers without restart");
             check("replacement-test-key".equals(lastKey.get()), "new key used for requests");
             DisplaySettings.update(root, p -> p.setProperty("mode", "eight_one"));
             service.pump(); service.suffix(FIRST); service.pump();

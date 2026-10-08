@@ -30,7 +30,7 @@ public class DirectIntegrationTest {
         int previousRenders = awh.vanillaRenders;
         mc.q.tab().a(854, new auo(), new auk());
         if (awh.vanillaRenders != previousRenders || avp.texts.stream().noneMatch(t -> t.value().equals("BBLR")) ||
-            avp.texts.stream().noneMatch(t -> t.value().equals("Seraph"))) throw new AssertionError("real agent table data did not reach renderer");
+            avp.texts.stream().noneMatch(t -> t.value().equals("Urchin"))) throw new AssertionError("real agent table data did not reach renderer");
         // Use the real installed OptiFine GuiChatOF class, with lightweight Minecraft fixtures.
         awv chat = (awv) Class.forName("net.optifine.gui.GuiChatOF").getConstructor(awv.class).newInstance(new awv("draft text"));
         mc.a(chat); pump(mc, 200);

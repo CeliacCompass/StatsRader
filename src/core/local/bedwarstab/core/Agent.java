@@ -118,7 +118,7 @@ public final class Agent {
         table[0][0] = "Tag"; table[0][1] = "Name";
         for (int i = 0; i < columns.size(); i++) table[0][i + 2] = switch (columns.get(i)) {
             case WINS -> "Wins"; case FINAL_KILLS -> "Finals"; case FINAL_DEATHS -> "F. Deaths";
-            case BEDS_BROKEN -> "Beds"; case BEDS_LOST -> "B. Lost"; case BLACKLIST -> "Seraph";
+            case BEDS_BROKEN -> "Beds"; case BEDS_LOST -> "B. Lost"; case BLACKLIST -> "Urchin";
             default -> columns.get(i).name();
         };
         List<Category> fetch = new ArrayList<>();

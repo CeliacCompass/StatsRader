@@ -18,7 +18,7 @@ public final class Launcher {
     private final Path root;
     private final Path dataRoot = DataPaths.directory();
     private final JFrame frame = new JFrame("StatsRader · Bedwars Companion");
-    private final JPasswordField hypixel = new JPasswordField(), seraph = new JPasswordField();
+    private final JPasswordField hypixel = new JPasswordField(), urchin = new JPasswordField();
     private final JTextField aliases = new JTextField();
     private final JComboBox<GameProcess> processes = new JComboBox<>();
     private final JComboBox<String> modes = new JComboBox<>(new String[]{"Gesamt", "Solo", "Doubles", "3v3v3v3", "4v4v4v4", "4v4"});
@@ -137,7 +137,7 @@ public final class Launcher {
         Theme.add(sidebar, new Theme.LogoPanel()); Theme.gap(sidebar,16);
         Theme.add(sidebar, Theme.label("DEIN MATCH IM BLICK", 11, Theme.CYAN, true)); Theme.gap(sidebar,10);
         Theme.add(sidebar, Theme.label("Mehr wissen. Besser spielen.", 15, Theme.TEXT, true)); Theme.gap(sidebar,22);
-        addStep(sidebar,"01", "Keys hinterlegen", "Hypixel-Stats & Seraph-Markierungen");
+        addStep(sidebar,"01", "Keys hinterlegen", "Hypixel-Stats & Urchin-Tags");
         addStep(sidebar,"02", "Badlion vorbereiten", "Hier starten, dann Minecraft öffnen");
         addStep(sidebar,"03", "Inject & losspielen", "Tab öffnen und Stats sehen");
         sidebar.add(Box.createVerticalGlue());
@@ -150,7 +150,7 @@ public final class Launcher {
         JPanel session = Theme.card();
         Theme.add(session, Theme.label("Verbindung zum Spiel", 18, Theme.TEXT, true)); Theme.gap(session,8);
         connection.setFont(Theme.BODY.deriveFont(12f)); connection.setForeground(Theme.MUTED); Theme.add(session,connection); Theme.gap(session,14);
-        Theme.combo(processes); Theme.combo(modes); Theme.input(hypixel); Theme.input(seraph); Theme.input(aliases);
+        Theme.combo(processes); Theme.combo(modes); Theme.input(hypixel); Theme.input(urchin); Theme.input(aliases);
         JPanel processRow = Theme.plain(new BorderLayout(8,0)); processRow.add(processes);
         JButton refresh = new Theme.ActionButton("Aktualisieren",false); refresh.setToolTipText("Spiele aktualisieren"); refresh.getAccessibleContext().setAccessibleName("Spiele aktualisieren");
         refresh.addActionListener(e -> refresh()); processRow.add(refresh,BorderLayout.EAST);
@@ -162,7 +162,7 @@ public final class Launcher {
         Theme.add(right, session); Theme.gap(right,14);
 
         JPanel settings = Theme.card(); Theme.add(settings, Theme.label("Keys & Einstellungen",18,Theme.TEXT,true)); Theme.gap(settings,16);
-        JPanel keys = Theme.plain(new GridLayout(1,2,16,0)); keys.add(Theme.field("Hypixel API-Key",hypixel)); keys.add(Theme.field("Seraph API-Key",seraph));
+        JPanel keys = Theme.plain(new GridLayout(1,2,16,0)); keys.add(Theme.field("Hypixel API-Key",hypixel)); keys.add(Theme.field("Urchin API-Key",urchin));
         keys.setMaximumSize(new Dimension(Integer.MAX_VALUE,69)); Theme.add(settings,keys); Theme.gap(settings,14);
         JPanel options = Theme.plain(new GridLayout(1,2,16,0)); options.add(Theme.field("Bedwars-Modus",modes)); options.add(Theme.field("Proxy-Adresse · optional",aliases));
         aliases.setToolTipText("Zusätzliche Hypixel-Adressen, durch Komma getrennt"); options.setMaximumSize(new Dimension(Integer.MAX_VALUE,69)); Theme.add(settings,options); Theme.gap(settings,14);
@@ -182,7 +182,7 @@ public final class Launcher {
         JScrollPane log = new JScrollPane(status); log.setBorder(null); log.getViewport().setBackground(Theme.CARD);
         log.setPreferredSize(new Dimension(100,60)); Theme.add(activity,log); Theme.add(right,activity);
         panel.add(right,BorderLayout.CENTER);
-        JPanel footer = Theme.plain(new BorderLayout()); footer.add(Theme.label("HYPIXEL STATS  +  SERAPH INTELLIGENCE",10,Theme.MUTED,true));
+        JPanel footer = Theme.plain(new BorderLayout()); footer.add(Theme.label("HYPIXEL STATS  +  URCHIN TAGS",10,Theme.MUTED,true));
         footer.add(Theme.label("StatsRader  /  Beta",10,Theme.MUTED,false),BorderLayout.EAST); panel.add(footer,BorderLayout.SOUTH);
         return panel;
     }
@@ -239,19 +239,19 @@ public final class Launcher {
         try {
             Path file = dataRoot.resolve("settings.properties"); if (!Files.isRegularFile(file)) return;
             Properties p = DisplaySettings.read(dataRoot);
-            hypixel.setText(p.getProperty("hypixelKey", "")); seraph.setText(p.getProperty("seraphKey", ""));
+            hypixel.setText(p.getProperty("hypixelKey", "")); urchin.setText(p.getProperty("urchinKey", ""));
             aliases.setText(p.getProperty("hypixelAliases", ""));
             for (int i = 0; i < MODE_IDS.length; i++) if (MODE_IDS[i].equals(p.getProperty("mode"))) modes.setSelectedIndex(i);
         } catch (IOException e) { status.setText("Lokale Einstellungen konnten nicht gelesen werden."); }
     }
     private void save() throws IOException {
-        String hypixelValue = new String(hypixel.getPassword()).trim(), seraphValue = new String(seraph.getPassword()).trim();
+        String hypixelValue = new String(hypixel.getPassword()).trim(), urchinValue = new String(urchin.getPassword()).trim();
         String mode = MODE_IDS[modes.getSelectedIndex()];
         String additionalHosts;
         try { additionalHosts = ServerHosts.parse(aliases.getText()).setting(); }
         catch (IllegalArgumentException e) { throw new IOException(e.getMessage(), e); }
         DisplaySettings.update(dataRoot, p -> {
-            p.setProperty("hypixelKey", hypixelValue); p.setProperty("seraphKey", seraphValue); p.setProperty("mode", mode);
+            p.setProperty("hypixelKey", hypixelValue); p.setProperty("urchinKey", urchinValue); p.remove("seraphKey"); p.setProperty("mode", mode);
             p.setProperty("hypixelAliases", additionalHosts);
         });
     }

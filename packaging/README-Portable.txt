@@ -5,7 +5,7 @@ Java ist enthalten. Es sind keine Administratorrechte und kein separates Java-Se
 
 STARTEN
 1. Die EXE öffnen. Beim ersten Start wird die App lokal entpackt.
-2. Eigene Hypixel-/Seraph-API-Keys eintragen und "Keys speichern" anklicken.
+2. Eigene Hypixel-/Urchin-API-Keys eintragen und "Keys speichern" anklicken. Der frühere Seraph-Key funktioniert nicht als Urchin-Key.
 3. Minecraft und Badlion vollständig schließen (auch das Symbol im Infobereich).
 4. In der App "Badlion starten" anklicken. Falls nötig Badlion Client.exe auswählen.
 5. Im Launcher Minecraft 1.8.9 starten, dann in dieser App "Inject" anklicken.
@@ -32,7 +32,7 @@ Mit "Deaktivieren" werden die Erweiterungsfunktionen abgeschaltet.
 
 STATUS
 Experimentelle Erweiterung für die getestete Badlion-1.8.9-Version.
-Kein offizielles Produkt von Badlion, Hypixel, Mojang oder Seraph.
+Kein offizielles Produkt von Badlion, Hypixel, Mojang, Urchin oder Seraph.
 Client-Updates und fehlende/abgelaufene API-Berechtigungen können die Funktion beeinflussen.
 Die Pakettests ersetzen keinen Test auf einem zweiten PC mit echtem Badlion.
 

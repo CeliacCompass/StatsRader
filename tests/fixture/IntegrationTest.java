@@ -14,7 +14,7 @@ public class IntegrationTest {
         if (!tab.a(player).contains("BW:")) throw new AssertionError("failed version switch disrupted active hook");
         Thread.sleep(1400);
         String result = tab.a(player);
-        if (!result.contains("BW:KEY") || !result.contains("BL:KEY")) throw new AssertionError("missing keys status: " + result);
+        if (!result.contains("BW:KEY") || !result.contains("U:KEY")) throw new AssertionError("missing keys status: " + result);
         if (!tab.a(null).equals("null")) throw new AssertionError("null render safety");
         awv chat = new awv();
         chat.submit("/party list", 28);
@@ -54,14 +54,14 @@ public class IntegrationTest {
         try (var reader = Files.newBufferedReader(Path.of(args[0], "state/settings.properties"))) { saved.load(reader); }
         if (!"false".equals(saved.getProperty("showStars")) || !"false".equals(saved.getProperty("showBlacklist")) || !"50".equals(saved.getProperty("backgroundOpacity"))) throw new AssertionError("selection/opacity not preserved");
         menu.click(9);
-        if (tab.a(player).contains("BW:") || !tab.a(player).contains("BL:")) throw new AssertionError("blacklist-only selection");
+        if (tab.a(player).contains("BW:") || !tab.a(player).contains("U:")) throw new AssertionError("blacklist-only selection");
         menu.click(100); if (ave.A().m != null) throw new AssertionError("Done did not close");
         chat.submit("/bwconfig", 156); if (ave.A().m == null || chat.forwarded != 1) throw new AssertionError("alias/numpad Enter");
         ave.A().m.key(1); if (ave.A().m != null) throw new AssertionError("Escape did not close");
         Boot.agentmain("attach|" + args[0], TestAgent.instrumentation);
         if (!opacity.invoke(null, -1).equals(50)) throw new AssertionError("agent reload forgot saved opacity");
         String second = tab.a(player);
-        if (second.contains("BW:") || !second.contains("BL:") || second.indexOf("BL:") != second.lastIndexOf("BL:")) throw new AssertionError("reload/persisted selection");
+        if (second.contains("BW:") || !second.contains("U:") || second.indexOf("U:") != second.lastIndexOf("U:")) throw new AssertionError("reload/persisted selection");
         Boot.agentmain("detach|" + args[0], TestAgent.instrumentation);
         if (Class.forName("local.bedwarstab.bridge.Bridge", false, null).getField("tickHandler").get(null) != null) throw new AssertionError("tick callback not removed");
         if (!tab.a(player).equals("Player")) throw new AssertionError("detach did not restore original method");
@@ -80,7 +80,7 @@ public class IntegrationTest {
         chat.submit("/config", 28);
         if (chat.forwarded != 3 || ave.A().m != null) throw new AssertionError("failed activation left chat hook");
         Boot.agentmain("attach|" + args[0], TestAgent.instrumentation);
-        if (!tab.a(player).contains("BL:")) throw new AssertionError("cannot recover after failed activation");
+        if (!tab.a(player).contains("U:")) throw new AssertionError("cannot recover after failed activation");
         Boot.agentmain("detach|" + args[0], TestAgent.instrumentation);
         System.out.println("PASS: isolated loading, Tab/chat hooks, local /config, real screen class, toggles, persistence, reload, rollback and detach in test JVM");
     }

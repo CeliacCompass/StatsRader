@@ -17,14 +17,14 @@ public final class StatsService implements AutoCloseable {
     private static final long[] FINAL_DEATH_COLORS = {500, 1000, 2500, 5000, 7500, 15000, 25000, 50000, 100000};
     private static final long[] BED_COLORS = {250, 500, 1250, 2500, 3750, 7500, 12500, 25000, 50000};
     private static final String[] TIER_COLORS = {"§f", "§a", "§2", "§e", "§6", "§c", "§4", "§d", "§5"};
-    private String hypixelKey, seraphKey;
+    private String hypixelKey, urchinKey;
     private String mode;
     private final Path settingsRoot;
     private volatile DisplaySettings display;
     private final ScheduledExecutorService worker;
     private final LinkedHashMap<UUID, Entry> cache = new LinkedHashMap<>(64, .75f, true);
     private final LinkedBlockingQueue<UUID> queue = new LinkedBlockingQueue<>(512);
-    private final Gate hypixel = new Gate(), seraph = new Gate();
+    private final Gate hypixel = new Gate(), urchin = new Gate();
     private volatile boolean closed;
     private final Transport transport;
     private final LongSupplier clock;
@@ -33,7 +33,7 @@ public final class StatsService implements AutoCloseable {
 
     static final class Gate { long until; boolean invalidKey; }
     static final class Entry {
-        volatile String bw = "§8BW:…", blacklist = " §8BL:…";
+        volatile String bw = "§8BW:…", blacklist = " §8U:…";
         ParsedStats stats;
         volatile long statsDue, blacklistDue, seen = System.currentTimeMillis();
         boolean queued;
@@ -47,7 +47,7 @@ public final class StatsService implements AutoCloseable {
         this.transport = transport == null ? this::fetch : transport;
         Properties p = DisplaySettings.read(root);
         hypixelKey = p.getProperty("hypixelKey", "").trim();
-        seraphKey = p.getProperty("seraphKey", "").trim();
+        urchinKey = p.getProperty("urchinKey", "").trim();
         mode = validMode(p.getProperty("mode", "overall"));
         display = DisplaySettings.from(p);
         worker = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -85,7 +85,7 @@ public final class StatsService implements AutoCloseable {
             for (int i = 0; i < columns.size(); i++) {
                 Category c = columns.get(i);
                 if (entry == null) cells[i] = "§8…";
-                else if (c == Category.BLACKLIST) cells[i] = entry.blacklist.trim().replace("BL:", "").replace("[", "").replace("]", "");
+                else if (c == Category.BLACKLIST) cells[i] = entry.blacklist.trim().replace("U:", "").replace("[", "").replace("]", "");
                 else if (entry.stats != null && entry.stats.status == null) {
                     String value = entry.stats.fields.getOrDefault(c, "§8—");
                     int unit = value.indexOf(' ');
@@ -130,20 +130,22 @@ public final class StatsService implements AutoCloseable {
             }
             now = clock.getAsLong();
             if (!closed && display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue) {
-                if (seraphKey.isEmpty()) { entry.blacklist = " §8BL:KEY"; entry.blacklistDue = Long.MAX_VALUE; }
-                else if (seraph.invalidKey) { entry.blacklist = " §cBL:AUTH"; entry.blacklistDue = Long.MAX_VALUE; }
-                else if (now < seraph.until) { entry.blacklist = " §eBL:LIMIT"; entry.blacklistDue = seraph.until; }
+                if (urchinKey.isEmpty()) { entry.blacklist = " §8U:KEY"; entry.blacklistDue = Long.MAX_VALUE; }
+                else if (urchin.invalidKey) { entry.blacklist = " §cU:AUTH"; entry.blacklistDue = Long.MAX_VALUE; }
+                else if (now < urchin.until) { entry.blacklist = " §eU:LIMIT"; entry.blacklistDue = urchin.until; }
                 else {
-                    Reply r = transport.fetch("https://api.seraph.si/blacklist/" + uuid, "seraph-api-key", seraphKey);
+                    String address = "https://urchin.ws/player/" + uuid + "?key=" + URLEncoder.encode(urchinKey, StandardCharsets.UTF_8) + "&sources=GAME";
+                    Reply r = transport.fetch(address, "", "");
                     if (closed) return;
-                    updateGate(seraph, r, clock.getAsLong());
-                    entry.blacklist = r.code == 200 ? parseBlacklist(r.body) : " §eBL:" + label(r.code);
-                    entry.blacklistDue = seraph.invalidKey ? Long.MAX_VALUE : Math.max(clock.getAsLong() + 60000, seraph.until);
+                    updateGate(urchin, r, clock.getAsLong());
+                    entry.blacklist = r.code == 200 ? parseUrchinTags(r.body) : r.code == 404 ? " §8U:–" : " §eU:" + label(r.code);
+                    long cacheMillis = r.code == 200 || r.code == 404 ? 300000 : 60000;
+                    entry.blacklistDue = urchin.invalidKey ? Long.MAX_VALUE : Math.max(clock.getAsLong() + cacheMillis, urchin.until);
                 }
             }
         } catch (Exception e) {
             synchronized (cache) { entry.stats = null; }
-            entry.bw = "§eBW:?"; entry.blacklist = " §eBL:?";
+            entry.bw = "§eBW:?"; entry.blacklist = " §eU:?";
             entry.statsDue = entry.blacklistDue = clock.getAsLong() + 60000;
             Agent.log("API worker: " + e.getClass().getSimpleName());
         } finally { synchronized (cache) { entry.queued = false; } }
@@ -153,19 +155,19 @@ public final class StatsService implements AutoCloseable {
         try {
             Properties p = DisplaySettings.read(settingsRoot);
             String newHypixel = p.getProperty("hypixelKey", "").trim();
-            String newSeraph = p.getProperty("seraphKey", "").trim();
+            String newUrchin = p.getProperty("urchinKey", "").trim();
             String newMode = validMode(p.getProperty("mode", "overall"));
-            boolean hypixelChanged = !newHypixel.equals(hypixelKey), seraphChanged = !newSeraph.equals(seraphKey);
+            boolean hypixelChanged = !newHypixel.equals(hypixelKey), urchinChanged = !newUrchin.equals(urchinKey);
             boolean modeChanged = !newMode.equals(mode);
-            if (!hypixelChanged && !seraphChanged && !modeChanged) return;
+            if (!hypixelChanged && !urchinChanged && !modeChanged) return;
             synchronized (cache) {
-                hypixelKey = newHypixel; seraphKey = newSeraph; mode = newMode;
+                hypixelKey = newHypixel; urchinKey = newUrchin; mode = newMode;
                 // A display/mode change must not defeat a provider's rate limit or invalid-key gate.
                 if (hypixelChanged) { hypixel.invalidKey = false; hypixel.until = 0; }
-                if (seraphChanged) { seraph.invalidKey = false; seraph.until = 0; }
+                if (urchinChanged) { urchin.invalidKey = false; urchin.until = 0; }
                 for (Entry entry : cache.values()) {
                     if (hypixelChanged || modeChanged) { entry.stats = null; entry.bw = "§8BW:…"; entry.statsDue = 0; }
-                    if (seraphChanged) { entry.blacklist = " §8BL:…"; entry.blacklistDue = 0; }
+                    if (urchinChanged) { entry.blacklist = " §8U:…"; entry.blacklistDue = 0; }
                 }
             }
             Agent.log("API settings reloaded (values omitted)");
@@ -210,8 +212,8 @@ public final class StatsService implements AutoCloseable {
                 connections.add(conn);
             }
             conn.setConnectTimeout(5000); conn.setReadTimeout(5000); conn.setInstanceFollowRedirects(false);
-            conn.setRequestProperty(header, key);
-            conn.setRequestProperty("User-Agent", "BedwarsTab/0.1");
+            if (!header.isEmpty()) conn.setRequestProperty(header, key);
+            conn.setRequestProperty("User-Agent", "StatsRader/0.3");
             conn.setRequestProperty("Accept", "application/json");
             int code = conn.getResponseCode();
             String body = "";
@@ -287,25 +289,29 @@ public final class StatsService implements AutoCloseable {
             return new ParsedStats(Map.copyOf(fields), null);
         } catch (RuntimeException e) { return unavailable("§eBW:?"); }
     }
-    public static String parseBlacklist(String json) {
+    /** Display only the category, never the free-form reason or reporting player's name. */
+    public static String parseUrchinTags(String json) {
         try {
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-            if (!success(root)) return " §eBL:?";
-            JsonObject blacklist = object(object(root, "data"), "blacklist");
-            if (!blacklist.has("tagged") || !blacklist.get("tagged").isJsonPrimitive() ||
-                !blacklist.getAsJsonPrimitive("tagged").isBoolean()) return " §eBL:?";
-            if (!blacklist.get("tagged").getAsBoolean()) return " §8BL:–";
-            String type = blacklist.has("report_type") && !blacklist.get("report_type").isJsonNull() ? blacklist.get("report_type").getAsString() : "";
-            String label = switch (type) {
-                case "cheating_blatant", "cheating_closet" -> "CHEAT";
-                case "sniping", "sniping_legit", "sniping_potential" -> "SNIPER";
-                case "caution" -> "CAUTION";
-                case "alt" -> "ALT";
-                case "bot" -> "BOT";
-                default -> "TAG";
-            };
-            return " §c§l[BL:" + label + "]§r";
-        } catch (RuntimeException e) { return " §eBL:?"; }
+            if (!root.has("tags") || !root.get("tags").isJsonArray()) return " §eU:?";
+            JsonArray tags = root.getAsJsonArray("tags");
+            if (tags.isEmpty()) return " §8U:–";
+            JsonElement first = tags.get(0);
+            if (!first.isJsonObject()) return " §eU:?";
+            JsonElement rawType = first.getAsJsonObject().get("type");
+            if (rawType == null || !rawType.isJsonPrimitive() || !rawType.getAsJsonPrimitive().isString()) return " §eU:?";
+            String type = rawType.getAsString().trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_ -]", "");
+            if (type.isEmpty()) return " §eU:?";
+            String label;
+            if (type.contains("CHEAT") || type.contains("HACK")) label = "CHEAT";
+            else if (type.contains("SNIP")) label = "SNIPER";
+            else if (type.contains("CAUTION")) label = "CAUTION";
+            else if (type.contains("BOT")) label = "BOT";
+            else if (type.contains("ALT") || type.contains("ACCOUNT")) label = "ALT";
+            else if (type.contains("INFO")) label = "INFO";
+            else label = "TAG";
+            return " §c§l[U:" + label + "]§r";
+        } catch (RuntimeException e) { return " §eU:?"; }
     }
     static JsonObject object(JsonObject parent, String key) {
         if (!parent.has(key)) return new JsonObject();

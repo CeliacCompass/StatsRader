@@ -39,8 +39,8 @@ public final class BedwarsTabPlayerTabOverlay extends awh {
         avn font = minecraft.k;
         boolean score = objective != null;
         int last = supplied[0].length - 1;
-        boolean seraph = "Seraph".equals(supplied[0][last]);
-        int extra = score ? 2 : 1, insert = seraph ? last : last + 1;
+        boolean urchin = "Urchin".equals(supplied[0][last]) || "Seraph".equals(supplied[0][last]);
+        int extra = score ? 2 : 1, insert = urchin ? last : last + 1;
         int columns = supplied[0].length + extra;
         String[][] cells = new String[supplied.length][columns];
         for (int r = 0; r < cells.length; r++) {

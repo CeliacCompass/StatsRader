@@ -18,7 +18,7 @@ public final class DisplaySettings {
         WINS("showWins", "Siege", true), WLR("showWlr", "WLR", false),
         FINAL_KILLS("showFinalKills", "Finale Kills", false), FINAL_DEATHS("showFinalDeaths", "Finale Tode", false),
         BEDS_BROKEN("showBedsBroken", "Betten zerstört", false), BEDS_LOST("showBedsLost", "Betten verloren", false),
-        KDR("showKdr", "KDR", false), BLACKLIST("showBlacklist", "Seraph-Blacklist", true),
+        KDR("showKdr", "KDR", false), BLACKLIST("showBlacklist", "Urchin-Tags", true),
         BBLR("showBblr", "BBLR (Betten-Verhältnis)", true);
         public final String key, label;
         public final boolean defaultValue;
