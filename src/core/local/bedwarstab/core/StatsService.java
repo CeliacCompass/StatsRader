@@ -28,6 +28,7 @@ public final class StatsService implements AutoCloseable {
     private final LinkedBlockingQueue<UUID> queue = new LinkedBlockingQueue<>(512);
     private final Gate hypixel = new Gate(), urchin = new Gate();
     private volatile boolean closed;
+    private long nextCredentialCheck;
     private final Transport transport;
     private final LongSupplier clock;
     private final Set<HttpURLConnection> connections = ConcurrentHashMap.newKeySet();
@@ -120,8 +121,10 @@ public final class StatsService implements AutoCloseable {
         synchronized (cache) { entry.queued = false; }
     }
     private void dispatch() {
-        if (closed || requests.getActiveCount() + requests.getQueue().size() >= 3) return;
-        reloadCredentials();
+        if (closed) return;
+        long now = clock.getAsLong();
+        if (now >= nextCredentialCheck) { reloadCredentials(); nextCredentialCheck = now + 1000; }
+        if (requests.getActiveCount() + requests.getQueue().size() >= 3) return;
         UUID uuid = queue.poll();
         if (uuid == null) return;
         Entry entry;
@@ -130,7 +133,7 @@ public final class StatsService implements AutoCloseable {
         synchronized (cache) {
             entry = cache.get(uuid);
             if (entry == null) return;
-            long now = clock.getAsLong();
+            now = clock.getAsLong();
             if (now - entry.seen <= 15000) {
                 if (display.anyStats() && now >= entry.statsDue) count++;
                 if (display.enabled(Category.BLACKLIST) && now >= entry.blacklistDue) count++;
