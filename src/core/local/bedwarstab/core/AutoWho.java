@@ -14,10 +14,14 @@ final class AutoWho implements AutoCloseable {
     private final ServerHosts hosts;
     private final StatsService stats;
     private final Set<UUID> evaluated = new HashSet<>();
+    private final Set<UUID> requested = new HashSet<>();
     private Object alertWorld;
     private boolean alertRoundActive;
     private long nextCheck;
     private boolean closed, reportedFailure;
+    private volatile String alertState = "waiting_server";
+    private volatile boolean roundMessageSent;
+    private volatile long matchStarts, playersSeen, statsRequested, statsReady, statsPending, statsErrors, qualified, nickedPlayers, messagesSent;
 
     AutoWho(ClassLoader loader) throws ReflectiveOperationException {
         this(loader, ServerHosts.parse(""), null);
@@ -65,6 +69,7 @@ final class AutoWho implements AutoCloseable {
             if (!hypixel || currentWorld == null || currentPlayer == null) {
                 rounds.observe(null, false, RoundStartTracker.Phase.OTHER, now);
                 clearAlerts();
+                alertState = "waiting_server";
                 return;
             }
             Object board = scoreboard.invoke(currentWorld), sidebar = objective.invoke(board, 1);
@@ -81,37 +86,73 @@ final class AutoWho implements AutoCloseable {
             }
             RoundStartTracker.Phase phase = RoundStartTracker.phase(heading, lines);
             boolean started = rounds.observe(currentWorld, true, phase, now);
-            if (phase == RoundStartTracker.Phase.WAITING) clearAlerts();
+            if (phase == RoundStartTracker.Phase.WAITING) { clearAlerts(); alertState = "waiting_match"; }
             if (started) {
                 send.invoke(currentPlayer, "/who");
                 alertWorld = currentWorld;
                 alertRoundActive = true;
                 evaluated.clear();
+                requested.clear();
+                roundMessageSent = false;
+                matchStarts++;
+                alertState = "match_started";
                 Agent.log("Auto /who sent after Bedwars match sidebar detected");
             }
             if (alertRoundActive && alertWorld == currentWorld) checkPlayers(minecraft);
             else if (alertWorld != null && alertWorld != currentWorld) clearAlerts();
         } catch (ReflectiveOperationException | RuntimeException e) {
+            alertState = "hook_error_" + e.getClass().getSimpleName();
             if (!reportedFailure) { reportedFailure = true; Agent.log("Auto /who or lobby alert failed: " + e.getClass().getSimpleName()); }
         }
     }
     private void checkPlayers(Object minecraft) throws ReflectiveOperationException {
-        if (stats == null) return;
+        if (stats == null) { alertState = "stats_service_unavailable"; return; }
         Object connection = network.invoke(minecraft);
-        for (Object info : (Collection<?>) playerInfoList.invoke(connection)) {
+        Collection<?> online = (Collection<?>) playerInfoList.invoke(connection);
+        playersSeen = online.size();
+        if (online.isEmpty()) { alertState = "no_players_in_tab_list"; return; }
+        int ready = 0, pending = 0, errors = 0, matches = 0;
+        for (Object info : online) {
             Object gameProfile = profile.invoke(info);
             UUID uuid = (UUID) profileId.invoke(gameProfile);
             if (uuid == null || evaluated.contains(uuid)) continue;
+            if (requested.add(uuid)) statsRequested++;
             stats.requestAlertStats(uuid);
             StatsService.AlertStats values = stats.alertStats(uuid);
-            if (values == null) continue;
+            if (values == null) {
+                String state = stats.alertState(uuid);
+                if (state.equals("pending")) pending++;
+                else if (state.equals("nick_or_unavailable")) {
+                    evaluated.add(uuid);
+                    nickedPlayers++;
+                    String name = String.valueOf(profileName.invoke(gameProfile));
+                    Object gui = localChat.invoke(playerHud(minecraft));
+                    printChat.invoke(gui, "§e[" + name + "] §7ist genickt.");
+                    messagesSent++;
+                    roundMessageSent = true;
+                    Agent.log("Lobby nick alert message displayed (player details omitted)");
+                }
+                else errors++;
+                continue;
+            }
+            ready++;
             evaluated.add(uuid);
             if (!values.qualifies()) continue;
+            matches++;
             String name = String.valueOf(profileName.invoke(gameProfile));
             String message = "§b[" + name + "] §f" + values.fkdr() + "/" + values.stars() + " §7[" + teamLabel(info) + "]";
             Object gui = localChat.invoke(playerHud(minecraft));
             printChat.invoke(gui, message);
+            messagesSent++;
+            roundMessageSent = true;
+            Agent.log("Lobby alert message displayed (player details omitted)");
         }
+        statsReady = ready; statsPending = pending; statsErrors = errors; qualified = matches;
+        if (matches > 0 || roundMessageSent) alertState = "alert_sent";
+        else if (pending > 0) alertState = "waiting_for_hypixel_stats";
+        else if (errors > 0) alertState = "hypixel_stats_error";
+        else if (ready > 0 || !evaluated.isEmpty()) alertState = "no_players_over_threshold";
+        else if (!alertState.startsWith("hook_error_")) alertState = "no_unchecked_players";
     }
     private Object playerHud(Object minecraft) throws IllegalAccessException {
         return hud.get(minecraft);
@@ -133,6 +174,22 @@ final class AutoWho implements AutoCloseable {
         return registered.isBlank() ? "?" : registered;
     }
     private static String titleCase(String value) { return Character.toUpperCase(value.charAt(0)) + value.substring(1); }
-    private void clearAlerts() { alertWorld = null; alertRoundActive = false; evaluated.clear(); }
+    private void clearAlerts() { alertWorld = null; alertRoundActive = false; evaluated.clear(); requested.clear(); }
+    synchronized Properties diagnostics() {
+        Properties p = new Properties();
+        p.setProperty("alerts.state", alertState);
+        p.setProperty("alerts.matchStarts", Long.toString(matchStarts));
+        p.setProperty("alerts.playersSeen", Long.toString(playersSeen));
+        p.setProperty("alerts.statsRequested", Long.toString(statsRequested));
+        p.setProperty("alerts.statsReady", Long.toString(statsReady));
+        p.setProperty("alerts.statsPending", Long.toString(statsPending));
+        p.setProperty("alerts.statsErrors", Long.toString(statsErrors));
+        p.setProperty("alerts.qualifying", Long.toString(qualified));
+        p.setProperty("alerts.nickedPlayers", Long.toString(nickedPlayers));
+        p.setProperty("alerts.messagesSent", Long.toString(messagesSent));
+        p.setProperty("alerts.roundActive", Boolean.toString(alertRoundActive));
+        p.setProperty("alerts.messageSentThisRound", Boolean.toString(roundMessageSent));
+        return p;
+    }
     public synchronized void close() { closed = true; clearAlerts(); }
 }

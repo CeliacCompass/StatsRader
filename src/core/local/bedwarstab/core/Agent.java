@@ -16,6 +16,7 @@ public final class Agent {
     private static TabTransformer transformer;
     private static ChatTransformer chatTransformer;
     private static TickTransformer tickTransformer;
+    private static NameTagTransformer nameTagTransformer;
     private static AutoWho autoWho;
     private static RuntimeDiagnostics diagnostics;
     private static GameLoop gameLoop;
@@ -27,6 +28,14 @@ public final class Agent {
     private static final List<Class<?>> patched = new ArrayList<>();
     private static final Object logLock = new Object();
     static volatile String tabOutcome = "not_requested";
+    static volatile String nametagOutcome = "not_seen";
+    static int nameTagTransformerChanged() { return nameTagTransformer == null ? 0 : nameTagTransformer.changed.get(); }
+    private static volatile WorldNameTags worldNameTags;
+    /** Release folder name; matches the Build= line in VERSION.txt so a runtime file can be tied to an EXE. */
+    static volatile String buildId = "unknown";
+    static Map<String, String> nameTagClassStates() { return nameTagTransformer == null ? Map.of() : Map.copyOf(nameTagTransformer.classStates); }
+    static String worldNameTagOutcome() { WorldNameTags w = worldNameTags; return w == null ? "unavailable" : w.outcome; }
+    static String worldNameTagRenderer() { WorldNameTags w = worldNameTags; return w == null ? "unknown" : w.playerRenderer; }
     private static final ClassValue<Method> profileGetters = new ClassValue<>() {
         protected Method computeValue(Class<?> type) {
             for (Method method : type.getMethods()) {
@@ -37,8 +46,10 @@ public final class Agent {
     };
     public static synchronized void run(String command, String directory, Instrumentation instrumentation) throws Exception {
         root = DataPaths.directory(); inst = instrumentation;
+        Path release = Path.of(directory).getFileName();
+        buildId = release == null ? "unknown" : release.toString();
         if (command.equals("detach")) { stop(); status("inactive", "Erweiterung deaktiviert"); return; }
-        if (transformer != null || chatTransformer != null || tickTransformer != null || service != null || !patched.isEmpty()) stop();
+        if (transformer != null || chatTransformer != null || tickTransformer != null || nameTagTransformer != null || service != null || !patched.isEmpty()) stop();
         tabOutcome = "not_requested";
         try {
             if (!inst.isRetransformClassesSupported()) throw new IllegalStateException("JVM erlaubt keine Klassen-Neutransformation");
@@ -54,9 +65,11 @@ public final class Agent {
             transformer = new TabTransformer();
             chatTransformer = new ChatTransformer();
             tickTransformer = new TickTransformer();
+            nameTagTransformer = new NameTagTransformer();
             inst.addTransformer(transformer, true);
             inst.addTransformer(chatTransformer, true);
             inst.addTransformer(tickTransformer, true);
+            inst.addTransformer(nameTagTransformer, true);
             for (Class<?> type : inst.getAllLoadedClasses()) {
                 if (TabTransformer.target(type.getName().replace('.', '/')) && inst.isModifiableClass(type)) {
                     serverGuard = new ServerGuard(type.getClassLoader(), hosts);
@@ -69,20 +82,34 @@ public final class Agent {
                 if (TickTransformer.target(type.getName()) && inst.isModifiableClass(type)) {
                     patched.add(type); inst.retransformClasses(type);
                 }
+                if (NameTagTransformer.target(type.getName().replace('.', '/')) && inst.isModifiableClass(type)) {
+                    patched.add(type); inst.retransformClasses(type);
+                }
             }
             if (transformer.changed.get() == 0) throw new IllegalStateException("Keine kompatible Minecraft-1.8.9-Tab-Klasse gefunden");
             if (chatTransformer.changed.get() == 0) throw new IllegalStateException("Keine kompatible Chat-Klasse für /config gefunden");
             if (tickTransformer.changed.get() == 0) throw new IllegalStateException("Kein kompatibler Spiel-Tick für Auto /who gefunden");
+            if (nameTagTransformer.changed.get() == 0) log("Optionaler Nametag-Renderer-Hook nicht verfügbar; Tab, Chat und /config bleiben aktiv");
             Bridge.decorator = Agent::decorate;
             Bridge.tableHandler = Agent::table;
             Bridge.configHandler = gameConfig::action;
             Bridge.backgroundHandler = gameConfig::background;
             Bridge.chatHandler = gameConfig::chat;
             Bridge.tickHandler = autoWho::tick;
+            Bridge.nametagHandler = Agent::nametag;
+            try {
+                worldNameTags = new WorldNameTags(gameLoader);
+                WorldNameTags world = worldNameTags;
+                Bridge.worldNametagHandler = world::render;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                worldNameTags = null;
+                log("World-pass nametag renderer unavailable: " + e.getClass().getSimpleName());
+            }
             gameLoop = new GameLoop(gameLoader, gameConfig); gameLoop.start();
-            diagnostics = new RuntimeDiagnostics(inst, gameLoader, root, gameLoop); diagnostics.start();
+            diagnostics = new RuntimeDiagnostics(inst, gameLoader, root, gameLoop, autoWho); diagnostics.start();
             status("installed", "Hooks installiert; tatsächliche Aufrufe stehen in runtime-<PID>.properties");
             log("Hooks installed; transformed classes=" + patched.size() + "; runtime callbacks not yet verified");
+            log("Nametag hooks: " + nameTagTransformer.classStates + "; world pass " + (worldNameTags == null ? "unavailable" : "ready"));
         } catch (Exception | LinkageError e) {
             try { stop(); } catch (Exception | LinkageError cleanup) { e.addSuppressed(cleanup); }
             status("error", e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -103,6 +130,34 @@ public final class Agent {
             tabOutcome = suffix.isEmpty() ? "empty_suffix" : "suffix_added";
             return original + suffix;
         } catch (ReflectiveOperationException | RuntimeException e) { tabOutcome = "profile_error:" + e.getClass().getSimpleName(); return original; }
+    }
+    private static String nametag(Object[] args) {
+        if (args == null || args.length != 7) { nametagOutcome = "bad_arguments"; return null; }
+        return statsLine(args[1]);
+    }
+    private static String statsLine(Object entity) {
+        try {
+            if (serverGuard == null || !serverGuard.isHypixel()) { nametagOutcome = "server_blocked"; return null; }
+            GameConfig config = gameConfig; StatsService current = service;
+            if (config == null || current == null) { nametagOutcome = "inactive"; return null; }
+            if (!config.nametagEnabled()) { nametagOutcome = "disabled"; return null; }
+            boolean player = false;
+            for (Class<?> type = entity.getClass(); type != null; type = type.getSuperclass())
+                if (type.getName().equals("bet") || type.getName().equals("net.minecraft.entity.player.EntityPlayer")) { player = true; break; }
+            if (!player) { nametagOutcome = "not_player:" + entity.getClass().getName(); return null; }
+            UUID uuid = null;
+            for (String method : new String[]{"aK", "getUniqueID", "func_110124_au"}) try {
+                uuid = (UUID) entity.getClass().getMethod(method).invoke(entity); break;
+            } catch (NoSuchMethodException ignored) { }
+            // Hypixel NPCs use version-2 UUIDs; they get no stats line instead of a misleading NICK label.
+            if (uuid != null && uuid.version() == 2) { nametagOutcome = "npc"; return null; }
+            String line = current.nametagStats(uuid);
+            nametagOutcome = line == null ? "stats_pending" : line.contains("NICK") ? "nick" : line.contains("ERROR") ? "api_error" : "stats_ready";
+            return line;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            nametagOutcome = "callback_error:" + e.getClass().getSimpleName();
+            log("Nametag stats callback failed: " + e.getClass().getSimpleName()); return "§cERROR";
+        }
     }
     private static String[][] table(Object[] players) {
         StatsService current = service;
@@ -147,11 +202,16 @@ public final class Agent {
         Bridge.chatHandler = null; Bridge.configHandler = null;
         Bridge.backgroundHandler = null;
         Bridge.tickHandler = null;
+        Bridge.nametagHandler = null;
+        Bridge.worldNametagHandler = null;
+        worldNameTags = null;
+        Bridge.resetNametagDedup();
         if (autoWho != null) { autoWho.close(); autoWho = null; }
         if (gameConfig != null) { gameConfig.close(); gameConfig = null; }
         if (service != null) { service.close(); service = null; }
         if (chatTransformer != null) { inst.removeTransformer(chatTransformer); chatTransformer = null; }
         if (tickTransformer != null) { inst.removeTransformer(tickTransformer); tickTransformer = null; }
+        if (nameTagTransformer != null) { inst.removeTransformer(nameTagTransformer); nameTagTransformer = null; }
         if (transformer != null) {
             inst.removeTransformer(transformer); transformer = null;
         }

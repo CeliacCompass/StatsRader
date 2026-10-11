@@ -4,6 +4,8 @@ public class ave {
     public bde serverData = new bde();
     public bde D() { return serverData; }
     public bdb f = new bdb();
+    public biu renderManager;
+    public biu af() { return renderManager; }
     public bew h = new bew();
     public avo q = new avo();
     public avn k = new avn();

@@ -71,7 +71,7 @@ public final class Boot {
             bridgeJar = new JarFile(root.resolve("dist/bridge.jar").toFile());
             instrumentation.appendToBootstrapClassLoaderSearch(bridgeJar);
             try {
-                if (Class.forName("local.bedwarstab.bridge.Bridge", false, null).getField("API_VERSION").getInt(null) != 6)
+                if (Class.forName("local.bedwarstab.bridge.Bridge", false, null).getField("API_VERSION").getInt(null) != 8)
                     throw new NoSuchFieldException("bridge version");
             } catch (ReflectiveOperationException e) { throw new IllegalStateException("Alte Bridge geladen; Minecraft neu starten", e); }
             // Keep ASM and Gson isolated from Minecraft's older dependencies.

@@ -11,6 +11,7 @@ public class AutoWhoAlertTest {
     private static final UUID STARS = UUID.fromString("10000000-0000-4000-8000-000000000001");
     private static final UUID FKDR = UUID.fromString("10000000-0000-4000-8000-000000000002");
     private static final UUID BORDER = UUID.fromString("10000000-0000-4000-8000-000000000003");
+    private static final UUID NICK = UUID.fromString("10000000-0000-4000-8000-000000000004");
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory(Path.of(args[0]), "alert-");
         Properties settings = new Properties(); settings.setProperty("hypixelKey", "test-only");
@@ -21,7 +22,9 @@ public class AutoWhoAlertTest {
         try (StatsService stats = new StatsService(root, (url, header, key) -> {
             apiCalls.incrementAndGet();
             String json = url.contains(STARS.toString().replace("-", "")) ? player(450, 20, 10)
-                : url.contains(FKDR.toString().replace("-", "")) ? player(300, 60, 10) : player(400, 50, 10);
+                : url.contains(FKDR.toString().replace("-", "")) ? player(300, 60, 10)
+                : url.contains(NICK.toString().replace("-", "")) ? "{\"success\":true,\"player\":null}"
+                : player(400, 50, 10);
             return new StatsService.Reply(200, json, "", "", "");
         }, System::currentTimeMillis, false)) {
             AutoWho who = new AutoWho(loader, ServerHosts.parse(""), stats);
@@ -34,6 +37,7 @@ public class AutoWhoAlertTest {
             players.add(info(loader, "StarPlayer", STARS, "aqua"));
             players.add(info(loader, "HighFkdr", FKDR, "red"));
             players.add(info(loader, "ExactlyAtLimit", BORDER, "pink"));
+            players.add(info(loader, "HiddenPlayer", NICK, "green"));
             Object world = mcType.getField("f").get(mc);
             Object board = world.getClass().getField("board").get(world);
             @SuppressWarnings("unchecked") List<Object> scores = (List<Object>) board.getClass().getField("scores").get(board);
@@ -50,15 +54,16 @@ public class AutoWhoAlertTest {
             Object player = mcType.getField("h").get(mc);
             @SuppressWarnings("unchecked") List<String> sent = (List<String>) player.getClass().getField("sent").get(player);
             check(sent.equals(List.of("/who")), "the round start still sends only /who");
-            check(messages.size() == 2, "only the two qualifying players are alerted: " + messages);
+            check(messages.size() == 3, "qualifying players and nick are alerted: " + messages);
             check(messages.stream().anyMatch(s -> s.contains("[StarPlayer]") && s.contains("2.00/450") && s.contains("[Aqua]")), "stars threshold alert includes FKDR, stars, and team");
             check(messages.stream().anyMatch(s -> s.contains("[HighFkdr]") && s.contains("6.00/300") && s.contains("[Red]")), "FKDR threshold alert includes stars and team");
             check(messages.stream().noneMatch(s -> s.contains("ExactlyAtLimit")), "strict thresholds exclude exactly 400 stars and FKDR 5");
+            check(messages.stream().anyMatch(s -> s.contains("[HiddenPlayer]") && s.contains("ist genickt")), "Hypixel's missing player profile triggers a nick chat message");
             tickFor(who, mc, stats, 700);
-            check(messages(mc).size() == 2, "each player is announced only once in a round");
+            check(messages(mc).size() == 3, "stats and nick alerts are each announced only once in a round");
             who.close();
         }
-        System.out.println("PASS: match-only chat alerts, thresholds, team and deduplication");
+        System.out.println("PASS: match-only chat alerts, nick detection, thresholds, team and deduplication");
     }
     private static Object info(ClassLoader loader, String name, UUID uuid, String teamName) throws Exception {
         Object team = newTeam(loader, ""); team.getClass().getField("registeredName").set(team, teamName);

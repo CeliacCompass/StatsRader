@@ -16,9 +16,11 @@ final class RuntimeDiagnostics implements AutoCloseable {
     private final Class<?> minecraft;
     private final Path file;
     private final GameLoop gameLoop;
+    private final AutoWho autoWho;
     private boolean closed;
-    RuntimeDiagnostics(Instrumentation instrumentation, ClassLoader loader, Path root, GameLoop gameLoop) throws ClassNotFoundException {
+    RuntimeDiagnostics(Instrumentation instrumentation, ClassLoader loader, Path root, GameLoop gameLoop, AutoWho autoWho) throws ClassNotFoundException {
         this.gameLoop = gameLoop;
+        this.autoWho = autoWho;
         this.instrumentation = instrumentation;
         minecraft = Class.forName("ave", false, loader);
         file = root.resolve("runtime-" + ProcessHandle.current().pid() + ".properties");
@@ -37,11 +39,24 @@ final class RuntimeDiagnostics implements AutoCloseable {
         p.setProperty("tick.calls", Long.toString(Bridge.tickCalls.get()));
         p.setProperty("tab.calls", Long.toString(Bridge.tabCalls.get()));
         p.setProperty("tab.outcome", Agent.tabOutcome);
+        p.setProperty("nametag.calls", Long.toString(Bridge.nametagCalls.get()));
+        p.setProperty("nametag.rows", Long.toString(Bridge.nametagRows.get()));
+        p.setProperty("nametag.state", Bridge.nametagState);
+        p.setProperty("nametag.outcome", Agent.nametagOutcome);
+        p.setProperty("nametag.transformedClasses", Integer.toString(Agent.nameTagTransformerChanged()));
+        Agent.nameTagClassStates().forEach((name, state) -> p.setProperty("nametag.class." + name, state));
+        p.setProperty("worldtag.calls", Long.toString(Bridge.worldNametagCalls.get()));
+        p.setProperty("worldtag.rows", Long.toString(Bridge.worldNametagRows.get()));
+        p.setProperty("worldtag.state", Bridge.worldNametagState);
+        p.setProperty("worldtag.outcome", Agent.worldNameTagOutcome());
+        p.setProperty("worldtag.playerRenderer", Agent.worldNameTagRenderer());
+        p.setProperty("app.build", Agent.buildId);
         p.setProperty("chat.calls", Long.toString(Bridge.chatCalls.get()));
         p.setProperty("bridge.failure", Bridge.lastFailure);
         p.setProperty("queue.submitted", Long.toString(gameLoop.submitted.get()));
         p.setProperty("queue.executed", Long.toString(gameLoop.executed.get()));
         p.setProperty("queue.failure", gameLoop.failure);
+        if (autoWho != null) p.putAll(autoWho.diagnostics());
         p.setProperty("selected.minecraft", type(minecraft));
         try {
             Object mc = minecraft.getMethod("A").invoke(null);

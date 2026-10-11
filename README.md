@@ -17,8 +17,9 @@ Zum Benutzen brauchst du nur die EXE aus Releases. Die Ordner hier enthalten Que
 ## Funktionen
 
 - Geordnete Tab-Tabelle mit Tag/Sternen, Name, FKDR, BBLR, WLR, Wins und weiteren auswählbaren Statistiken.
+- Zusätzliche Zeile mit Sternen und FKDR direkt unter jedem Spielernamensschild; der normale Name bleibt unverändert.
 - Individuelle Farbstufen für die Statistikwerte; Urchin-Tags und serverseitige HP/Score-Werte ganz rechts.
-- **`/config`** für Statistikspalten und Hintergrundtransparenz.
+- **`/config`** für Statistikspalten, Hintergrundtransparenz und den unabhängigen Schalter **Nametag-Stats**.
 - Automatisches **`/who`** beim erkannten Bedwars-Rundenstart.
 - Maskierte API-Key-Felder und Key-Wechsel während des Spiels.
 - **Inject** und **Deaktivieren** für eine vorbereitete Spielsitzung.

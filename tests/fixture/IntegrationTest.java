@@ -24,7 +24,7 @@ public class IntegrationTest {
         chat.submit(" /CoNfIg ", 28);
         axu menu = ave.A().m;
         if (chat.forwarded != 1 || menu == null || !menu.getClass().getName().equals("BedwarsTabConfigScreen")) throw new AssertionError("/config did not open locally");
-        if (menu.d() || menu.buttons().size() != 13) throw new AssertionError("menu buttons/pause behavior");
+        if (menu.d() || menu.buttons().size() != 14) throw new AssertionError("menu buttons/pause behavior");
         for (int[] resolution : new int[][]{{320,240},{427,240},{854,480}}) {
             menu.l = resolution[0]; menu.m = resolution[1]; menu.b();
             for (avs button : menu.buttons()) if (button.h < 0 || button.i < 0 || button.h + button.width > menu.l || button.i + button.height > menu.m) throw new AssertionError("menu off-screen");

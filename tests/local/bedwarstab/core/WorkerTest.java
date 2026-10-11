@@ -31,21 +31,42 @@ public class WorkerTest {
         try (StatsService service = new StatsService(root, transport, clock::get, false)) {
             service.suffix(FIRST); service.pump();
             check(service.suffix(FIRST).contains("4.00 FKDR"), "successful background fetch");
+            check(service.nametagStats(UUID.fromString("00000000-0000-1000-8000-000000000001")).equals("§8NICK"), "nametag nick UUID gets NICK without an API request");
+            service.applyDisplaySettings(new DisplaySettings(Set.of()));
+            check(service.nametagStats(SECOND) == null, "nametag line stays hidden while loading");
+            service.pump();
+            check(service.nametagStats(SECOND).contains("✫]") && service.nametagStats(SECOND).contains("FKDR"), "nametag stats request works independently of tab categories");
+            check(service.nametagStats(FIRST).equals("§7[0✫] §8│ §a4.00 FKDR"), "nametag reuses stars and FKDR category colors");
+            service.applyDisplaySettings(DisplaySettings.defaults());
             String[] cells = service.tableCells(FIRST, List.of(Category.STARS, Category.FKDR, Category.BBLR, Category.WINS, Category.BLACKLIST));
             check(cells[1].equals("§a4.00") && cells[2].equals("§70.00") && cells[3].equals("§77") && cells[4].equals("§8–"), "table cells contain values without repeated labels and use ratio/count colors");
             check(Arrays.stream(service.tableCells(UUID.fromString("00000000-0000-1000-8000-000000000001"), List.of(Category.FKDR))).allMatch(s -> s.equals("§8—")), "nick identifiers do not fetch fake statistics");
             service.applyDisplaySettings(new DisplaySettings(Set.of(Category.WINS)));
             check(service.suffix(FIRST).contains("7 W") && !service.suffix(FIRST).contains("FKDR"), "reformat cached counters immediately");
-            service.pump(); check(hypixelCalls.get() == 1 && urchinCalls.get() == 1, "toggle does not refetch");
+            service.pump(); check(hypixelCalls.get() == 2 && urchinCalls.get() == 1, "toggle does not refetch");
             service.applyDisplaySettings(new DisplaySettings(Set.of()));
             check(service.suffix(SECOND).isEmpty(), "all hidden leaves no suffix"); service.pump();
-            check(hypixelCalls.get() == 1 && urchinCalls.get() == 1, "hidden providers do not query");
+            check(hypixelCalls.get() == 2 && urchinCalls.get() == 1, "hidden providers do not query");
             service.applyDisplaySettings(DisplaySettings.defaults());
             response.set(reply(403, "")); clock.addAndGet(301000); service.suffix(FIRST); service.pump();
             check(service.suffix(FIRST).contains("BW:AUTH") && service.suffix(FIRST).contains("U:–"), "Hypixel auth failure does not suppress Urchin tags");
             service.applyDisplaySettings(new DisplaySettings(Set.of(Category.FKDR)));
             check(service.suffix(FIRST).contains("BW:AUTH") && !service.suffix(FIRST).contains("4.00"), "toggle cannot resurrect old successful stats");
-            service.suffix(SECOND); service.pump(); check(hypixelCalls.get() == 2, "invalid key stops further player queries");
+            service.suffix(SECOND); service.pump(); check(hypixelCalls.get() == 3, "invalid key stops further player queries");
+            UUID third = UUID.randomUUID();
+            check(service.nametagStats(third) == null, "nametag hides a new player until an error is known");
+            service.pump();
+            check(service.nametagStats(third).equals("§cERROR"), "Hypixel API/auth failures show ERROR on nametag");
+        }
+        response.set(reply(500, "")); hypixelCalls.set(0);
+        try (StatsService service = new StatsService(root, transport, clock::get, false)) {
+            service.requestAlertStats(FIRST); service.pump();
+            check(service.alertState(FIRST).equals("api_http_error"), "chat alert reports Hypixel API errors without exposing credentials");
+            for (int i = 0; i < 20; i++) { service.requestAlertStats(FIRST); service.pump(); }
+            check(hypixelCalls.get() == 1, "failed alert stats do not spin requests before the retry deadline");
+            clock.addAndGet(61000); response.set(reply(200, PLAYER));
+            service.requestAlertStats(FIRST); service.pump();
+            check(service.alertStats(FIRST) != null && service.alertState(FIRST).equals("ready"), "chat alert stats recover after retry deadline");
         }
         hypixelCalls.set(0); urchinCalls.set(0);
         response.set(new StatsService.Reply(429, "", "", "", "120"));

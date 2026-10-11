@@ -1,4 +1,4 @@
-function Get-BedwarsJavaHome([string]$ProjectRoot) {
+﻿function Get-BedwarsJavaHome([string]$ProjectRoot) {
     $marker = Join-Path $ProjectRoot '.deps\jdk-path.txt'
     if (Test-Path -LiteralPath $marker) {
         $candidate = (Get-Content -LiteralPath $marker -Raw).Trim()

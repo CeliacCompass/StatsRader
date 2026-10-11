@@ -1,4 +1,4 @@
-param([switch]$SkipBuild)
+﻿param([switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'paths.ps1')
@@ -58,7 +58,7 @@ foreach ($source in @('temurin-jdk17u-79597447bd94.tar.gz','temurin-build-e6ba7d
 }
 
 $releaseId = Split-Path $releaseRoot -Leaf
-@("Product=StatsRader", "Version=0.3.1-beta.1", "Build=$releaseId", "Platform=Windows x86_64") | Set-Content -LiteralPath (Join-Path $payload 'VERSION.txt') -Encoding utf8
+@("Product=StatsRader", "Version=0.3.2-beta.9", "Build=$releaseId", "Platform=Windows x86_64") | Set-Content -LiteralPath (Join-Path $payload 'VERSION.txt') -Encoding utf8
 $manifest = Join-Path $packageRoot 'payload.manifest'
 $files = @(Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName)
 $manifestLines = foreach ($file in $files) {
@@ -68,12 +68,20 @@ $manifestLines = foreach ($file in $files) {
 }
 [IO.File]::WriteAllLines($manifest, $manifestLines, (New-Object Text.UTF8Encoding($false)))
 $zip = Join-Path $packageRoot 'payload.zip'
-[IO.Compression.ZipFile]::CreateFromDirectory($payload, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+# Explicit '/' entry names: Windows PowerShell 5.1 (.NET Framework) would otherwise write '\' and the EXE rejects them.
+Add-Type -AssemblyName System.IO.Compression
+$archive = [IO.Compression.ZipFile]::Open($zip, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($file in $files) {
+        $relative = $file.FullName.Substring($payload.Length + 1).Replace('\','/')
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $relative, [IO.Compression.CompressionLevel]::Optimal)
+    }
+} finally { $archive.Dispose() }
 $digestFile = Join-Path $packageRoot 'payload.sha256'
 (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $digestFile -Encoding ascii
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (!(Test-Path -LiteralPath $compiler)) { throw '.NET Framework C# compiler missing' }
-$output = Join-Path $publishRoot ('StatsRader-0.3.1-beta.1-' + $releaseId + '-win-x64.exe')
+$output = Join-Path $publishRoot ('StatsRader-0.3.2-beta.9-' + $releaseId + '-win-x64.exe')
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ "/win32icon:$(Join-Path $projectRoot 'assets\statsrader.ico')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll "/win32manifest:$(Join-Path $projectRoot 'packaging\portable.manifest')" "/resource:$zip,payload.zip" "/resource:$manifest,payload.manifest" "/resource:$digestFile,payload.sha256" "/out:$output" (Join-Path $projectRoot 'packaging\Portable.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Portable EXE compilation failed' }
 

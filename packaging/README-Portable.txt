@@ -9,7 +9,8 @@ STARTEN
 3. Minecraft und Badlion vollständig schließen (auch das Symbol im Infobereich).
 4. In der App "Badlion starten" anklicken. Falls nötig Badlion Client.exe auswählen.
 5. Im Launcher Minecraft 1.8.9 starten, dann in dieser App "Inject" anklicken.
-6. Auf Hypixel Tab öffnen. Mit /config Spalten und Hintergrundstärke einstellen.
+6. Auf Hypixel Tab öffnen. Mit /config Spalten, Hintergrundstärke und Nametag-Stats einstellen.
+   Die Zusatzzeile mit Sternen und FKDR erscheint unter dem unveränderten Spielernamen.
 
 Bei späteren Spielstarts Badlion wieder über die App starten. Ein normal gestartetes
 Badlion kann Java-Attach sperren; die App ändert diese Sperre nicht.

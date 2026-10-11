@@ -94,8 +94,38 @@ public final class StatsService implements AutoCloseable {
             }
             entry.seen = clock.getAsLong();
             entry.alertWanted = true;
-            if (entry.stats == null && !entry.queued && entry.statsDue != Long.MAX_VALUE)
+            if (entry.stats == null && !entry.queued && entry.statsDue != Long.MAX_VALUE && clock.getAsLong() >= entry.statsDue)
                 entry.queued = queue.offer(uuid);
+        }
+    }
+    /** Queue player stats for rendering without ever waiting on the render thread. */
+    String nametagStats(UUID uuid) {
+        if (uuid == null || uuid.version() != 4) return "§8NICK";
+        Entry entry;
+        synchronized (cache) {
+            if (closed) return null;
+            entry = cache.get(uuid);
+            if (entry == null) {
+                if (cache.size() >= 512) { Iterator<UUID> iterator = cache.keySet().iterator(); iterator.next(); iterator.remove(); }
+                entry = new Entry(); cache.put(uuid, entry);
+            }
+            long now = clock.getAsLong(); entry.seen = now; entry.alertWanted = true;
+            if (!entry.queued && now >= entry.statsDue && entry.statsDue != Long.MAX_VALUE)
+                entry.queued = queue.offer(uuid);
+            if (entry.stats != null && entry.stats.status == null) {
+                String stars = entry.stats.fields.get(Category.STARS);
+                String fkdr = entry.stats.fields.get(Category.FKDR);
+                return stars == null || fkdr == null ? "§cERROR" : stars + " §8│ " + fkdr;
+            }
+            if (entry.stats != null && entry.stats.status != null) {
+                String status = entry.stats.status.toUpperCase(Locale.ROOT);
+                return status.contains("NICK") ? "§8NICK" : "§cERROR";
+            }
+            if (!entry.bw.equals("§8BW:…")) {
+                if (entry.bw.toUpperCase(Locale.ROOT).contains("NICK")) return "§8NICK";
+                if (entry.statsDue != 0) return "§cERROR";
+            }
+            return null; // Loading state is deliberately hidden.
         }
     }
     AlertStats alertStats(UUID uuid) {
@@ -104,6 +134,33 @@ public final class StatsService implements AutoCloseable {
             if (entry == null || entry.stats == null || entry.stats.status != null) return null;
             ParsedStats stats = entry.stats;
             return new AlertStats(stats.stars, stats.finalKills, stats.finalDeaths);
+        }
+    }
+    /** A credential-free status for explaining why a lobby alert has not appeared yet. */
+    String alertState(UUID uuid) {
+        synchronized (cache) {
+            Entry entry = cache.get(uuid);
+            if (entry == null || entry.statsDue == 0 || entry.queued || entry.pendingRequests > 0) return "pending";
+            if (entry.stats != null && entry.stats.status == null) return "ready";
+            if (entry.stats != null && entry.stats.status != null) {
+                String result = entry.stats.status.toUpperCase(Locale.ROOT);
+                if (result.contains("NICK")) return "nick_or_unavailable";
+                if (result.contains("AUTH")) return "api_auth_error";
+                if (result.contains("KEY")) return "api_key_missing";
+                if (result.contains("LIMIT")) return "api_rate_limited";
+                if (result.contains("NET")) return "api_network_error";
+                if (result.contains("HTTP")) return "api_http_error";
+                if (result.contains("?")) return "api_response_error";
+            }
+            String status = entry.bw == null ? "" : entry.bw.toUpperCase(Locale.ROOT);
+            if (status.contains("AUTH")) return "api_auth_error";
+            if (status.contains("KEY")) return "api_key_missing";
+            if (status.contains("LIMIT")) return "api_rate_limited";
+            if (status.contains("NICK")) return "nick_or_unavailable";
+            if (status.contains("NET")) return "api_network_error";
+            if (status.contains("HTTP")) return "api_http_error";
+            if (status.contains("?")) return "api_response_error";
+            return "pending";
         }
     }
     record AlertStats(long stars, long finalKills, long finalDeaths) {
@@ -385,7 +442,7 @@ public final class StatsService implements AutoCloseable {
             long stars = achievements.has("bedwars_level") ? number(achievements, "bedwars_level") : level(number(bw, "Experience"));
             String color = fkdrColor(kills, deaths);
             Map<Category, String> fields = new EnumMap<>(Category.class);
-            fields.put(Category.STARS, "§e" + stars + "★");
+            fields.put(Category.STARS, Prestige.format(stars));
             fields.put(Category.FKDR, color + ratio(kills, deaths) + " FKDR");
             fields.put(Category.WINS, countColor(Category.WINS, wins) + compact(wins) + " W");
             fields.put(Category.WLR, wlrColor(wins, losses) + ratio(wins, losses) + " WLR");

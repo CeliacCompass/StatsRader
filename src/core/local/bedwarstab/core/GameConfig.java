@@ -15,10 +15,12 @@ final class GameConfig {
     private final Method inputText;
     private final Constructor<?> screen;
     private int backgroundOpacity, savedOpacity;
+    private volatile boolean showNametagStats;
     private String message = "§7Änderungen werden sofort übernommen und gespeichert";
     GameConfig(ClassLoader game, Path projectRoot, Path dataRoot, StatsService service) throws Exception {
         this.service = service; this.dataRoot = dataRoot;
         backgroundOpacity = savedOpacity = DisplaySettings.backgroundOpacity(DisplaySettings.read(dataRoot));
+        showNametagStats = Boolean.parseBoolean(DisplaySettings.read(dataRoot).getProperty("showNametagStats", "true"));
         Class<?> mc = Class.forName("ave", false, game);
         Class<?> gui = Class.forName("axu", false, game);
         Class<?> chat = Class.forName("awv", false, game);
@@ -56,12 +58,24 @@ final class GameConfig {
                 message = "§cSpeichern fehlgeschlagen – Auswahl unverändert";
                 Agent.log("Config save failed: " + e.getClass().getSimpleName());
             }
+        } else if (id == Category.values().length) {
+            boolean next = !showNametagStats;
+            try {
+                DisplaySettings.update(dataRoot, p -> p.setProperty("showNametagStats", Boolean.toString(next)));
+                showNametagStats = next;
+                message = "§aNametag-Stats gespeichert";
+            } catch (java.io.IOException e) {
+                message = "§cSpeichern fehlgeschlagen – Nametag-Auswahl unverändert";
+                Agent.log("Nametag setting save failed: " + e.getClass().getSimpleName());
+            }
         }
-        String[] labels = new String[Category.values().length + 1];
+        String[] labels = new String[Category.values().length + 2];
         for (Category category : Category.values()) labels[category.ordinal()] = category.label + ": " +
             (service.displaySettings().enabled(category) ? "§aAN" : "§cAUS");
+        labels[Category.values().length] = "Nametag-Stats: " + (showNametagStats ? "§aAN" : "§cAUS");
         labels[labels.length - 1] = message; return labels;
     }
+    boolean nametagEnabled() { return showNametagStats; }
     synchronized int background(int action) {
         if (action >= 0 && action <= 100) backgroundOpacity = action;
         else if (action >= 1000 && action <= 1100) {

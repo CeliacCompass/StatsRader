@@ -21,4 +21,5 @@ public class avn {
         avp.graphics.drawString(text.replaceAll("§.", ""), x, y + 8);
         return a(text);
     }
+    public int a(String text, int x, int y, int color) { return text.length(); }
 }
