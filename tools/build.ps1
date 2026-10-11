@@ -46,7 +46,7 @@ $manifest = Join-Path $build 'agent.mf'
 @('Manifest-Version: 1.0','Agent-Class: local.bedwarstab.Boot','Premain-Class: local.bedwarstab.Boot','Can-Retransform-Classes: true','Can-Redefine-Classes: true','') | Set-Content -LiteralPath $manifest -Encoding ascii
 & $jar --create --file (Join-Path $dist 'agent.jar') --manifest $manifest -C (Join-Path $build 'boot') .
 if ($LASTEXITCODE -ne 0) { throw 'Agent packaging failed' }
-& $jar --create --file (Join-Path $dist 'launcher.jar') --main-class local.bedwarstab.Launcher -C (Join-Path $build 'launcher') . -C (Join-Path $projectRoot 'assets') statsrader-logo.png
+& $jar --create --file (Join-Path $dist 'launcher.jar') --main-class local.bedwarstab.Launcher -C (Join-Path $build 'launcher') . -C (Join-Path $projectRoot 'assets') statsrader-logo.png -C (Join-Path $projectRoot 'assets') statsrader-icon.png
 if ($LASTEXITCODE -ne 0) { throw 'Launcher packaging failed' }
 foreach ($module in @('bridge','core','screens')) {
     & $jar --create --file (Join-Path $dist "$module.jar") -C (Join-Path $build $module) .

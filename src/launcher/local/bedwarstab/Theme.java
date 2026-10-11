@@ -8,15 +8,25 @@ import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 
-/** Shared desktop palette; all controls retain native Swing keyboard/accessibility behavior. */
+/** Shared desktop palette, taken from the neon radar logo; all controls retain native Swing keyboard/accessibility behavior. */
 final class Theme {
-    static final Color BG = new Color(0x070D16), CARD = new Color(0x101C2A), INPUT = new Color(0x09131F);
-    static final Color LINE = new Color(0x22364A), TEXT = new Color(0xECF5FF), MUTED = new Color(0x92A9BF);
-    static final Color CYAN = new Color(0x00D6EE), BLUE = new Color(0x007AFF);
+    static final Color BG = new Color(0x03181F), CARD = new Color(0x0A242A), INPUT = new Color(0x051B21);
+    static final Color LINE = new Color(0x1A3F42), TEXT = new Color(0xE9FFF6), MUTED = new Color(0x8DB3A8);
+    static final Color ACCENT = new Color(0x2CF5A0), ACCENT_DEEP = new Color(0x12B877);
     static final Font BODY = new Font("Segoe UI", Font.PLAIN, 13);
-    static BufferedImage logo() {
-        try { return ImageIO.read(Theme.class.getResourceAsStream("/statsrader-logo.png")); }
-        catch (Exception e) { throw new IllegalStateException("StatsRader-Logo fehlt im Programmpaket", e); }
+    /** Neon mark with glow, shown inside the app. */
+    static BufferedImage logo() { return image("/statsrader-logo.png", "StatsRader-Logo"); }
+    /** Flat mark on a transparent background, used for the window and taskbar. */
+    static BufferedImage icon() { return image("/statsrader-icon.png", "StatsRader-Icon"); }
+    /** The icon at the sizes Windows asks for, so the taskbar never upscales a tiny image. */
+    static java.util.List<Image> icons() {
+        BufferedImage icon = icon(); java.util.List<Image> sizes = new java.util.ArrayList<>();
+        for (int size : new int[]{16, 20, 24, 32, 40, 48, 64, 128, 256}) sizes.add(icon.getScaledInstance(size, size, Image.SCALE_SMOOTH));
+        return sizes;
+    }
+    private static BufferedImage image(String resource, String name) {
+        try { return ImageIO.read(Theme.class.getResourceAsStream(resource)); }
+        catch (Exception e) { throw new IllegalStateException(name + " fehlt im Programmpaket", e); }
     }
     static void install() {
         try { UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName()); } catch (Exception ignored) { }
@@ -45,11 +55,11 @@ final class Theme {
         p.add(name, BorderLayout.NORTH); p.add(input); p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 69)); return p;
     }
     static void input(JTextField field) {
-        field.setBackground(INPUT); field.setForeground(TEXT); field.setCaretColor(CYAN); field.setSelectionColor(new Color(0x155278));
+        field.setBackground(INPUT); field.setForeground(TEXT); field.setCaretColor(ACCENT); field.setSelectionColor(new Color(0x11553F));
         field.setFont(BODY); field.setPreferredSize(new Dimension(80, 40));
         field.setBorder(new CompoundBorder(new LineBorder(LINE, 1, true), new EmptyBorder(8, 12, 8, 12)));
         field.addFocusListener(new FocusAdapter() {
-            public void focusGained(FocusEvent e) { field.setBorder(new CompoundBorder(new LineBorder(CYAN, 1, true), new EmptyBorder(8,12,8,12))); }
+            public void focusGained(FocusEvent e) { field.setBorder(new CompoundBorder(new LineBorder(ACCENT, 1, true), new EmptyBorder(8,12,8,12))); }
             public void focusLost(FocusEvent e) { field.setBorder(new CompoundBorder(new LineBorder(LINE, 1, true), new EmptyBorder(8,12,8,12))); }
         });
     }
@@ -58,7 +68,7 @@ final class Theme {
         combo.setBorder(new LineBorder(LINE, 1, true));
         combo.setUI(new BasicComboBoxUI() {
             protected JButton createArrowButton() {
-                JButton b = new javax.swing.plaf.basic.BasicArrowButton(SwingConstants.SOUTH, INPUT, INPUT, CYAN, INPUT);
+                JButton b = new javax.swing.plaf.basic.BasicArrowButton(SwingConstants.SOUTH, INPUT, INPUT, ACCENT, INPUT);
                 b.setBorder(new EmptyBorder(0,0,0,0)); b.setPreferredSize(new Dimension(32,32)); return b;
             }
         });
@@ -98,8 +108,8 @@ final class Theme {
         protected void paintComponent(Graphics graphics) {
             Graphics2D g = (Graphics2D)graphics.create(); g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             if (!isEnabled()) g.setColor(LINE);
-            else if (primary) g.setPaint(new GradientPaint(0,0, getModel().isRollover() ? new Color(0x6DF0FF) : CYAN, getWidth(),getHeight(),new Color(0x009DDB)));
-            else g.setColor(getModel().isRollover() ? new Color(0x233C52) : new Color(0x172A3C));
+            else if (primary) g.setPaint(new GradientPaint(0,0, getModel().isRollover() ? new Color(0x7CFFC6) : ACCENT, getWidth(),getHeight(),ACCENT_DEEP));
+            else g.setColor(getModel().isRollover() ? new Color(0x1B4646) : new Color(0x113234));
             g.fillRoundRect(0,0,getWidth(),getHeight(),12,12);
             if (hasFocus()) { g.setColor(Color.WHITE); g.drawRoundRect(2,2,getWidth()-5,getHeight()-5,10,10); }
             g.dispose(); super.paintComponent(graphics);

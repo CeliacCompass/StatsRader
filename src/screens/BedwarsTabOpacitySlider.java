@@ -22,12 +22,12 @@ public final class BedwarsTabOpacitySlider extends avs {
     public void a(ave minecraft, int mouseX, int mouseY) {
         if (!m) return;
         if (dragging) update(mouseX);
-        avp.a(h, i, h + f, i + g, 0xDD172634);
+        avp.a(h, i, h + f, i + g, 0xDD0F2A2C);
         int knob = h + 5 + Math.round((f - 10) * value / 100f);
-        avp.a(h + 5, i + 20, h + f - 5, i + 23, 0xFF405464);
-        avp.a(h + 5, i + 20, knob, i + 23, 0xFF51BED0);
-        avp.a(knob - 3, i + 17, knob + 3, i + 26, dragging ? 0xFFFFFFFF : 0xFF9DE7F0);
-        minecraft.k.a(j, (float)(h + (f - minecraft.k.a(j)) / 2), (float)(i + 3), 0xE4EDF4);
+        avp.a(h + 5, i + 20, h + f - 5, i + 23, 0xFF2E5450);
+        avp.a(h + 5, i + 20, knob, i + 23, 0xFF2CF5A0);
+        avp.a(knob - 3, i + 17, knob + 3, i + 26, dragging ? 0xFFFFFFFF : 0xFFA6FAD6);
+        minecraft.k.a(j, (float)(h + (f - minecraft.k.a(j)) / 2), (float)(i + 3), 0xE6F4EF);
     }
     public void a(int mouseX, int mouseY) {
         if (dragging) update(mouseX);

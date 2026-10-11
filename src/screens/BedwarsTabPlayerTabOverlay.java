@@ -94,38 +94,38 @@ public final class BedwarsTabPlayerTabOverlay extends awh {
         try {
             bfl.b((screenWidth - totalWidth * scale) / 2f, 10f, 0f);
             bfl.a(scale, scale, 1f);
-            background(-2, -2, totalWidth + 2, height + 2, 0xDD101923, strength);
+            background(-2, -2, totalWidth + 2, height + 2, 0xDD061A1F, strength);
             int y = 4;
-            for (String line : header) { text(font, line, (totalWidth - font.a(line)) / 2, y, 0xD3DFE9); y += 11; }
+            for (String line : header) { text(font, line, (totalWidth - font.a(line)) / 2, y, 0xD3EDE5); y += 11; }
             if (!header.isEmpty()) y += 3;
             int tableTop = y, left = (totalWidth - bodyWidth) / 2;
             for (int panel = 0; panel < panels; panel++) {
                 int px = left + panel * (panelWidth + GAP);
-                background(px, tableTop, px + panelWidth, tableTop + ROW, 0xF0273B4D, strength);
-                background(px, tableTop + ROW - 1, px + panelWidth, tableTop + ROW, 0xFF51BED0, strength);
+                background(px, tableTop, px + panelWidth, tableTop + ROW, 0xF0123634, strength);
+                background(px, tableTop + ROW - 1, px + panelWidth, tableTop + ROW, 0xFF2CF5A0, strength);
                 drawCells(font, cells[0], widths, px, tableTop + 2, true, null, strength);
                 for (int row = 0; row < rows; row++) {
                     int index = panel * rows + row;
                     if (index >= players.size()) break;
                     int ry = tableTop + (row + 1) * ROW;
-                    background(px, ry, px + panelWidth, ry + ROW, row % 2 == 0 ? 0x90212D3A : 0x90192430, strength);
+                    background(px, ry, px + panelWidth, ry + ROW, row % 2 == 0 ? 0x90142B2E : 0x900D2226, strength);
                     drawCells(font, cells[index + 1], widths, px, ry + 2, false, players.get(index), strength);
                 }
             }
             y = tableTop + (rows + 1) * ROW + 4;
-            for (String line : footer) { text(font, line, (totalWidth - font.a(line)) / 2, y, 0xBBCAD8); y += 11; }
+            for (String line : footer) { text(font, line, (totalWidth - font.a(line)) / 2, y, 0xBBD6CD); y += 11; }
         } finally { bfl.c(1f, 1f, 1f, 1f); bfl.F(); }
     }
     private void drawCells(avn font, String[] cells, int[] widths, int x, int y, boolean header, bdc player, int strength) {
         for (int c = 0; c < cells.length; c++) {
-            if (c > 0) background(x, y - 1, x + 1, y + ROW - 2, 0x183F667D, strength);
+            if (c > 0) background(x, y - 1, x + 1, y + ROW - 2, 0x183F7D6E, strength);
             int tx = c == 1 ? x + PAD + 11 : x + widths[c] - PAD - font.a(cells[c]);
             if (c == 1 && player != null) {
                 bfl.c(1f, 1f, 1f, 1f); minecraft.P().a(player.g());
                 avp.a(x + PAD, y, 8f, 8f, 8, 8, 8, 8, 64f, 64f);
                 avp.a(x + PAD, y, 40f, 8f, 8, 8, 8, 8, 64f, 64f);
             }
-            text(font, cells[c], tx, y, header ? 0x82DCE8 : 0xE4EDF4);
+            text(font, cells[c], tx, y, header ? 0x8FF5C8 : 0xE6F4EF);
             x += widths[c];
         }
     }

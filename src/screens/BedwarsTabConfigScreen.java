@@ -24,7 +24,7 @@ public final class BedwarsTabConfigScreen extends axu {
     }
     public void a(int mouseX, int mouseY, float partialTicks) {
         c();
-        a(q, "§b§lSTATSRADER §f– Einstellungen", l / 2, top - 20, 0xFFFFFF);
+        a(q, "§a§lSTATSRADER §f– Einstellungen", l / 2, top - 20, 0xFFFFFF);
         String[] current = Bridge.config(-1); footer = current[current.length - 1];
         a(q, footer, l / 2, footerY, 0xAAAAAA);
         super.a(mouseX, mouseY, partialTicks);

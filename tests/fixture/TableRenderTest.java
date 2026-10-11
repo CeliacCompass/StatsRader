@@ -38,7 +38,7 @@ public class TableRenderTest {
         avp.reset(854, 480); Bridge.backgroundHandler = action -> 100; tab.a(854, new auo(), new auk());
         List<avp.Text> fullText = List.copyOf(avp.texts);
         List<Integer> originalColors = List.copyOf(avp.rectangleColors);
-        if (originalColors.get(0) != 0xDD101923) throw new AssertionError("100% changed original background");
+        if (originalColors.get(0) != 0xDD061A1F) throw new AssertionError("100% changed original background");
         avp.reset(854, 480); Bridge.backgroundHandler = action -> 50; tab.a(854, new auo(), new auk());
         if (!avp.texts.equals(fullText)) throw new AssertionError("background dimmed or shifted text");
         for (int i = 0; i < originalColors.size(); i++) {

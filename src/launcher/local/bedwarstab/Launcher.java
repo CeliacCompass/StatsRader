@@ -70,7 +70,7 @@ public final class Launcher {
                     if (com.sun.tools.attach.spi.AttachProvider.providers().isEmpty()) throw new IOException("Attach-Modul fehlt");
                     if (!Files.isRegularFile(Path.of(System.getProperty("java.home"), "bin/java.exe"))) throw new IOException("Java-Helfer fehlt");
                     java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
-                    Theme.logo();
+                    Theme.logo(); Theme.icon();
                     System.out.println("PASS: portable distribution, bundled Java, fonts and Attach provider available."); return 0;
                 }
                 if (action.equals("allow-server")) {
@@ -116,7 +116,7 @@ public final class Launcher {
     private Launcher(Path root) { this.root = root; }
     private void show() {
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        frame.setIconImage(Theme.logo());
+        frame.setIconImages(Theme.icons());
         JScrollPane page = new JScrollPane(createContent()); page.setBorder(null); page.getViewport().setBackground(Theme.BG);
         frame.setContentPane(page);
         Rectangle desktop = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
@@ -129,20 +129,20 @@ public final class Launcher {
         JPanel header = Theme.plain(new BorderLayout()); JPanel title = Theme.column();
         Theme.add(title, Theme.label("StatsRader", 30, Theme.TEXT, true));
         Theme.add(title, Theme.label("Deine Lobby. Deine Stats. Dein Überblick.", 13, Theme.MUTED, false)); header.add(title);
-        JLabel badge = Theme.label("  BADLION  /  1.8.9  ", 11, Theme.CYAN, true);
+        JLabel badge = Theme.label("  BADLION  /  1.8.9  ", 11, Theme.ACCENT, true);
         badge.setBorder(new javax.swing.border.CompoundBorder(new javax.swing.border.LineBorder(Theme.LINE,1,true), new EmptyBorder(10,10,10,10)));
         JPanel badges = Theme.plain(new FlowLayout(FlowLayout.RIGHT,0,10)); badges.add(badge); header.add(badges, BorderLayout.EAST); panel.add(header, BorderLayout.NORTH);
 
         JPanel sidebar = Theme.card(); sidebar.setPreferredSize(new Dimension(260, 0)); sidebar.setBorder(new EmptyBorder(8,12,18,12));
         Theme.add(sidebar, new Theme.LogoPanel()); Theme.gap(sidebar,16);
-        Theme.add(sidebar, Theme.label("DEIN MATCH IM BLICK", 11, Theme.CYAN, true)); Theme.gap(sidebar,10);
+        Theme.add(sidebar, Theme.label("DEIN MATCH IM BLICK", 11, Theme.ACCENT, true)); Theme.gap(sidebar,10);
         Theme.add(sidebar, Theme.label("Mehr wissen. Besser spielen.", 15, Theme.TEXT, true)); Theme.gap(sidebar,22);
         addStep(sidebar,"01", "Keys hinterlegen", "Hypixel-Stats & Urchin-Tags");
         addStep(sidebar,"02", "Badlion vorbereiten", "Hier starten, dann Minecraft öffnen");
         addStep(sidebar,"03", "Inject & losspielen", "Tab öffnen und Stats sehen");
         sidebar.add(Box.createVerticalGlue());
         Theme.add(sidebar, Theme.label("IM SPIEL", 10, Theme.MUTED, true)); Theme.gap(sidebar,6);
-        Theme.add(sidebar, Theme.label("/config", 22, Theme.CYAN, true)); Theme.gap(sidebar,4);
+        Theme.add(sidebar, Theme.label("/config", 22, Theme.ACCENT, true)); Theme.gap(sidebar,4);
         Theme.add(sidebar, Theme.label("Kategorien & Transparenz einstellen", 11, Theme.MUTED, false));
         panel.add(sidebar, BorderLayout.WEST);
 
@@ -176,7 +176,7 @@ public final class Launcher {
             catch (IOException error) { status.setText("Einstellungen konnten nicht gespeichert werden: " + error.getMessage()); }
         });
         inject.addActionListener(e -> run("attach")); detach.addActionListener(e -> run("detach"));
-        JPanel activity = Theme.card(); Theme.add(activity,Theme.label("STATUS",10,Theme.CYAN,true)); Theme.gap(activity,8);
+        JPanel activity = Theme.card(); Theme.add(activity,Theme.label("STATUS",10,Theme.ACCENT,true)); Theme.gap(activity,8);
         status.setEditable(false); status.setLineWrap(true); status.setWrapStyleWord(true); status.setRows(3);
         status.setFont(Theme.BODY.deriveFont(12f)); status.setForeground(Theme.MUTED); status.setBackground(Theme.CARD); status.setBorder(null);
         JScrollPane log = new JScrollPane(status); log.setBorder(null); log.getViewport().setBackground(Theme.CARD);
@@ -204,7 +204,7 @@ public final class Launcher {
         }
         GameProcess current = (GameProcess) processes.getSelectedItem();
         boolean ready = current != null && RuntimeControl.available(dataRoot, current.pid);
-        connection.setForeground(ready ? Theme.CYAN : Theme.MUTED);
+        connection.setForeground(ready ? Theme.ACCENT : Theme.MUTED);
         connection.setText(current == null ? "●  Warte auf Minecraft 1.8.9" : ready ? "●  Verbunden · bereit für Inject" : "●  Spiel gefunden · Verbindung noch nicht vorbereitet");
     }
     private void startBadlion(JButton button) {
